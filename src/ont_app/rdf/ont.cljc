@@ -14,8 +14,8 @@
   :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/rdf/ont#"
   })
 
-(def ontology-ref (atom (make-graph)))
+(def ontology-atom (atom (make-graph)))
 
 (defn update-ontology [to-add]
-  (swap! ontology-ref add to-add))
+  (swap! ontology-atom add to-add))
 

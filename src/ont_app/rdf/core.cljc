@@ -36,7 +36,7 @@ It includes:
   }
  )
 
-(def ontology ont/ontology)
+(def ontology @ont/ontology-atom)
 
 ;; FUN WITH READER MACROS
 

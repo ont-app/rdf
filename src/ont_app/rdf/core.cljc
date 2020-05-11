@@ -119,7 +119,7 @@ Where
   (atom
    {LangStr
     (cognitect.transit/write-handler
-     "ont-app.igraph-grafter.rdf.LangStr"
+     "ont-app.rdf.core.LangStr"
      (fn [ls]
        {:lang (.lang ls)
         :s (.s ls)
@@ -151,7 +151,7 @@ Where
     write-handler in @`transit-write-handlers`.
   "
   (atom
-   {"ont-app.igraph-grafter.rdf.LangStr"
+   {"ont-app.rdf.core.LangStr"
     (cognitect.transit/read-handler
      (fn [from-rep]
        (->LangStr (:s from-rep) (:lang from-rep))))

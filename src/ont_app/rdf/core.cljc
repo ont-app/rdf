@@ -48,6 +48,31 @@ It includes:
    (defn on-js-reload [] )
    )
 
+;; standard clojure containers are declared by default as descendents of
+;; :rdf-app/TransitData, which keys to the render-literal method for rendering
+;; transit data. renders as transit by default.
+;; Note that you can undo this with 'underive', in which case
+;; it will probably be rendered as a string, unless you want
+;; to write your own method...
+(derive #?(:clj clojure.lang.PersistentVector
+           :cljs cljs.core.PersistentVector)
+        :rdf-app/TransitData)
+(derive #?(:clj clojure.lang.PersistentHashSet
+           :cljs cljs.core.PersistentHashSet )
+        :rdf-app/TransitData)
+(derive #?(:clj clojure.lang.PersistentArrayMap
+           :cljs cljs.core.PersistentArrayMap )
+        :rdf-app/TransitData)
+(derive #?(:clj clojure.lang.PersistentList
+           :cljs cljs.core.PersistentList )
+        :rdf-app/TransitData)
+(derive #?(:clj clojure.lang.Cons
+           :cljs cljs.core.Cons )
+        :rdf-app/TransitData)
+(derive #?(:clj clojure.lang.LazySeq
+           :cljs cljs.core.LazySeq )
+        :rdf-app/TransitData)
+
 ;; NO READER MACROS BEYOND THIS POINT
 
 
@@ -88,6 +113,7 @@ Where
 
 
 (defn lang [langStr]
+  "returns the language tag associated with `langStr`"
   (.lang langStr))
 
 (defmethod print-method LangStr
@@ -212,25 +238,14 @@ Where
   "Returns an RDF (Turtle) rendering of `literal`"
   render-literal-dispatch)
 
-;; standard clojure containers renders as transit by default.
-;; Note that you can undo this with 'underive', in which case
-;; it will probably be rendered as a string, unless you want
-;; to write your own method...
-(derive clojure.lang.PersistentVector :rdf/TransitData)
-(derive clojure.lang.PersistentHashSet :rdf/TransitData)
-(derive clojure.lang.PersistentArrayMap :rdf/TransitData)
-(derive clojure.lang.PersistentList :rdf/TransitData)
-(derive clojure.lang.Cons :rdf/TransitData)
-(derive clojure.lang.LazySeq :rdf/TransitData)
 
-(defmethod render-literal :rdf/TransitData
+(defmethod render-literal :rdf-app/TransitData
   [v]
   (render-literal-as-transit-json v))
 
 (defmethod render-literal :default
   [s]
-  (quote-str s)
-  )
+  (quote-str s))
 
 
 (defn bnode-kwi?
@@ -302,6 +317,15 @@ Where
   ")
 
 (defn query-for-normal-form
+  "Returns IGraph normal form for <graph> named by `graph-uri-fn` in `rdf-store`
+  Where
+  <graph> is a named graph in <rdf-store>
+  <graph-uri-fn> := fn [rdf-store] -> <graph>
+  <rdf-store> is an RDF store 
+  <query-fn> := fn [rdf-store sparql-query] -> #{<bmap>, ...}
+  <bmap> := {:?s :?p :?o}
+  <sparql-query> :- `normal-form-query-template`
+  "
   ([query-fn rdf-store]
    (query-for-normal-form (fn [_] nil) query-fn rdf-store))
   
@@ -326,9 +350,14 @@ Where
     (let [query (selmer/render normal-form-query-template
                                (query-template-map graph-uri-fn rdf-store))
           ]
-      (reduce collect-binding
-              {}
-              (query-fn rdf-store query))))))
+      (value-trace
+       ::QueryForNormalForm
+       [:log/query query
+        :log/graph-uri-fn graph-uri-fn
+        :log/query-fn query-fn]
+       (reduce collect-binding
+               {}
+               (query-fn rdf-store query)))))))
 
 
 (defn check-ns-metadata 
@@ -344,7 +373,8 @@ Where
 
 
 (defn check-qname [uri-spec]
-  "Traps the keyword assertion error in voc and throws a more meaningful error about blank nodes not being supported as first-class identifiers."
+  "Traps the keyword assertion error in voc and throws a more meaningful error 
+about blank nodes not being supported as first-class identifiers."
   (if (bnode-kwi? uri-spec)
     uri-spec
     ;;else not a blank node

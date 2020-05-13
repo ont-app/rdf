@@ -10,7 +10,7 @@
 (voc/cljc-put-ns-meta!
  'ont-app.validation.ont
  {
-  :vann/preferredNamespacePrefix "rdf"
+  :vann/preferredNamespacePrefix "rdf-app"
   :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/rdf/ont#"
   })
 
@@ -30,6 +30,7 @@
   :foaf/homepage "https://github.com/cognitect/transit-format"
   })
 
+
 (update-ontology!
  [[:igraph/SerializationFormat
    :rdf/type :rdfs/Class
@@ -37,7 +38,7 @@
    ]
   [:transit/format
    :rdfs/domain :igraph/SerializationFormat
-   :rdfs/range :rdf/Literal
+   :rdfs/range :rdf-app/Literal
    :rdfs/comment "Asserts the name of the transit encoding format"
    ]
   [:transit/json
@@ -54,6 +55,12 @@
    :igraph/mimeType "application/transit+msgpack"
    :rdfs/comment "Refers to the Transit data encoded as msgpack. Literals whose 
   :datatype metadata is :transit/msgpack should be readable with transit/read 
-   encoded for format :msgpack (not currently supported in sparql-client)"
+   encoded for format :msgpack (not currently supported)"
+   ]
+  [:rdf-app/TransitData
+   :rdf/type :rdf/Class
+   :rdfs/comment "Refers to Clojure data which should be encoded/decoded as 
+transit via a `derive` statement. There is a render-literal keyed to the KWI 
+for this class."
    ]
   ])

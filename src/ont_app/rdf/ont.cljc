@@ -8,7 +8,7 @@
    )
   )
 (voc/cljc-put-ns-meta!
- 'ont-app.validation.ont
+ 'ont-app.rdf.ont
  {
   :vann/preferredNamespacePrefix "rdf-app"
   :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/rdf/ont#"

@@ -9,30 +9,56 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 - [Motivation](#h2-motivation)
 - [Literals](#h2-literals)
   - [The `render-literal` multimethod](#h3-render-literal-mulitmethod)
+    - [`@special-literal-dispatch`](#h4-special-literal-dispatch)
+  - [Language-tagged strings](#h3-language-tagged-strings)
+  - [`xsd` values](#h3-xsd-values)
+  - [Transit-encoded-values](#h3-transit-encoded-values)
+- [Query templates supporting the IGraph member-access methods](#h2-query-templates)
 
+<a name="h2-dependencies"></a>
 ## Dependencies
-Watch this space.
 
+
+```
+[ont-app/rdf "0.1.0-SNAPSHOT"]
+```
+
+Require thus:
+```
+(:require 
+  [ont-app.rdf.core :as rdf-app]
+  )      
+```
+
+### URI namespace mappings
+The namepace metadata of the core maps to `ont-app.rdf.ont`, whose
+preferred prefix is `rdf-app` (since `rdf` is already spoken for).
+
+The base URI is declared as `http://rdf.naturallexicon.org/ns/cognitect.transit#`
+    
+<a name="h2-motivation"></a>
 ## Motivation
 There are numerous RDF-based platforms, each with its own
 idosyncracies, but there is also a significant overlap between the
 underlying logical structure of each such platform. This library aims
 to capture that overlap, parameterized appropriately for
-platform-specific variations.
+implementation-specific variations.
 
 This includes:
 - A multimethod `render-literal`, aimed at translating between clojure
   data and data to be stored in an RDF store.
-- Support for language-tagged strings and a declaration of a `#lstr`
+- Support for language-tagged strings and a declaration of an `#lstr`
   reader macro.
 - Support for a `^^transit:json` datatype tag, allowing for arbitrary
-  clojure content to be serialized/deserialized as json-based text in
+  clojure content to be serialized/deserialized as strings in
   an RDF store.
 - SPARQL query templates and supporting code to query for the standard
   member access methods of the IGraph protocol.
 
+<a name="h2-literals"></a>
 ## Literals
 
+<a name="h3-render-literal-multimethod"></a>
 ### The `render-literal` multimethod
 
 Each RDF-based implementation of IGraph will need to translate between
@@ -47,34 +73,36 @@ translating between these contexts.
 `render-literal` is dispatched by the function
 `render-literal-dispatch`, which takes as an argument a single
 literal, and returns a value expected to be fielded by some
-_render-literal_ method keyed to it.
+_render-literal_ method keyed to that value.
 
 By default, instances of the LangStr record (described below) will be
 dispatched on ::LangStr, otherwise the type of the literal will be the
 dispatch value.
 
-There is a _translate-literal_ method defined for :rdf/TransitData,
+There is a _translate-literal_ method defined for :rdf-app/TransitData,
 discussed in more detail below.
 
+<a name="h4-special-literal-dispatch"></a>
 #### `@special-literal-dispatch` 
 
-Often there are planform-specific behavior required for specific types
-of literals, for example in the case where grafter has its own regime
-in place for handling xsd values.
+Often there is platform-specific behavior required for specific types
+of literals, for example grafter has its own way of handling xsd values.
 
-There is an atom defined called `special-literal-dispatch` (defult nil) which if non-nil should be a function `f [x] -> <dispatch-value>`. Any non-nil dispatch value returned by this function will override the default behavior, and provide a dispatch value to which you may target your own platform-specific methods.
+There is an atom defined called `special-literal-dispatch` (defult nil) which if non-nil should be a function `f [x] -> <dispatch-value>`. Any non-nil dispatch value returned by this function will override the default behavior of _render-literal-dispatch_, and provide a dispatch value to which you may target the appropriate methods.
 
+<a name="h3-language-tagged-strings"></a>
 ### Language-tagged strings
 
 RDF entails use of language-tagged strings (e.g. `"gaol"@en-GB`) when
-providing natural-language content. Doing this directly in Clojure is a bit hard to type, since the inner quotes would need to be escaped. 
+providing natural-language content. Typing this directly in Clojure code is a bit a bit awkward, since the inner quotes would need to be escaped. 
 
-This library defines a reader macro `#lstr` and accompanying record _LangStr_ to facilitate wriing these in clojure. The value above for example would be written: `#lstr "gaol@en-GB"`.
+This library defines a reader macro `#lstr` and accompanying record _LangStr_ to facilitate wriing language-tagged strings in clojure. The value above for example would be written: `#lstr "gaol@en-GB"`.
 
-The such values will be dispatched as :rdf/LangStr, but the
+Such values will be dispatched to _render-literal_ as _:rdf/LangStr_, but the
 _render-literal_ method for LangStr is expected to be
 platform-sepcific.
 
+<a name="h3-xsd-values"></a>
 ### `xsd` values
 
 Most RDF-platforms will typically provide some means of dealing with
@@ -88,7 +116,8 @@ appropriate.
 The existing `sparql-client` and `igraph-grafter` implementations
 should serve as instructive examples.
 
-### Transit-based values
+<a name="h3-transit-encoded-values></a>
+### Transit-encoded values
 
 Of course some values such as the standard Clojure containers, and
 user-defined records and datatypes will not be handled by the xsd
@@ -129,7 +158,52 @@ the follwing delcaration in _ont-app.rdf.ont_:
   :foaf/homepage "https://github.com/cognitect/transit-format"
   })
 ```
-TODO: import readme content from spaql-client.
+
+<a name="h2-query-templates"></a>
+## Query templates supporting the IGraph member-access methods
+
+It is expected that the basic IGraph member-access methods will be
+covered by a common set of SPARQL queries for most if not all
+RDF-based implementations.
+
+For example, here is a template that should serve to acquire normal form of a given graph (modulo tractability):
+
+```
+(def normal-form-query-template
+  "
+  Select ?s ?p ?o
+  Where
+  {
+    {{graph-name-open|safe}}
+    ?s ?p ?o
+    {{graph-name-close}}
+  }
+  ")
+
+```
+
+This template can be referenced by a function `query-for-normal-form`
+
+```
+> (query-for-normal-form <query-fn> <rdf-store>)
+> (query-for-normal-form <graph-kwi> <query-fn> <rdf-store>)
+```
+Where:
+
+- `<graph-kwi>` is a KWI for the named graph URI (defaults to _nil_, indicating the DEFAULT graph)
+- `<query-fn>` is a platform-specific function to pose the rendered query template to _rdf-store_.
+- `<rdf-store>` is a platform-specific point of access to the RDF store, e.g. a database connection or SPARQL endpoint.
+
+Analogous template/function ensembles are defined for:
+- `query-for-subjects`
+- `query-for-p-o`
+- `query-for-o`
+- `ask-s-p-o`
+
+Wherever KWIs are involved, checks will be performed to flag warnings
+in cases where the metadata has not been properly specified for the
+implied namespace of the KWI.
+
 
 ## License
 

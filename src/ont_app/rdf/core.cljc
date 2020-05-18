@@ -260,20 +260,20 @@ Where
 ;; STANDARD TEMPLATES FOR IGRAPH MEMBER ACCESS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- query-template-map [graph-uri-fn rdf-store]
+(defn- query-template-map [graph-uri rdf-store]
   "Returns {<k> <v>, ...} appropriate for <rdf-store>
 Where
 <k> and <v> are selmer template parameters which may appear in some query, e.g.
   named graph open/close clauses
 <rdf-store> is an RDF store.
 "
-  {:graph-name-open (if-let [graph-uri (graph-uri-fn rdf-store)]
+  {:graph-name-open (if graph-uri
                       (str "GRAPH <" (voc/iri-for graph-uri) "> {")
                       "")
-   :graph-name-close (if-let [graph-uri (graph-uri-fn rdf-store)]
+   :graph-name-close (if graph-uri 
                       (str "}")
                       "")
-   })                          
+   })                  
 
 (def subjects-query-template
   "
@@ -292,15 +292,15 @@ Where
   rendered per the binding translator of <rdf-store>
   <rdf-store> conforms to ::sparql-client spec
   <query-fn> := fn [repo] -> bindings
-  <graph-uri-fn> := [repo] -> Graph URI, or nil
+  <graph-uri> is a URI  or KWI naming the graph  (or nil if DEFAULT graph)
 "
   ([query-fn rdf-store]
    (query-for-subjects (fn [_] nil) query-fn rdf-store)
    )
   
-  ([graph-uri-fn query-fn rdf-store]
+  ([graph-uri query-fn rdf-store]
    (let [query (selmer/render subjects-query-template
-                              (query-template-map graph-uri-fn rdf-store))
+                              (query-template-map graph-uri rdf-store))
          ]
      (map :s
           (query-fn rdf-store query)))))
@@ -317,19 +317,19 @@ Where
   ")
 
 (defn query-for-normal-form
-  "Returns IGraph normal form for <graph> named by `graph-uri-fn` in `rdf-store`
+  "Returns IGraph normal form for <graph> named by `graph-uri` in `rdf-store`
   Where
   <graph> is a named graph in <rdf-store>
-  <graph-uri-fn> := fn [rdf-store] -> <graph>
+  <graph-uri> is a URI or KWI naming the graph (default nil -> DEFAULT graph)
   <rdf-store> is an RDF store 
   <query-fn> := fn [rdf-store sparql-query] -> #{<bmap>, ...}
   <bmap> := {:?s :?p :?o}
   <sparql-query> :- `normal-form-query-template`
   "
   ([query-fn rdf-store]
-   (query-for-normal-form (fn [_] nil) query-fn rdf-store))
+   (query-for-normal-form nil query-fn rdf-store))
   
-  ([graph-uri-fn query-fn rdf-store]
+  ([graph-uri query-fn rdf-store]
    (letfn [
            (add-o [o binding]
              (conj o (:o binding)))
@@ -348,12 +348,12 @@ Where
           
           ]
     (let [query (selmer/render normal-form-query-template
-                               (query-template-map graph-uri-fn rdf-store))
+                               (query-template-map graph-uri rdf-store))
           ]
       (value-trace
        ::QueryForNormalForm
        [:log/query query
-        :log/graph-uri-fn graph-uri-fn
+        :log/graph-uri graph-uri
         :log/query-fn query-fn]
        (reduce collect-binding
                {}
@@ -410,16 +410,16 @@ Where
   <s> is a subject uri keyword. ~ voc/voc-re
   <rdf-store> is and RDF store.
   <query-fn> := fn [repo] -> bindings
-  <graph-uri-fn> := [repo] -> Graph URI, or nil
+  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
 "
   ([query-fn rdf-store s]
-   (query-for-p-o (fn [_] nil) query-fn rdf-store s)
+   (query-for-p-o nil  query-fn rdf-store s)
    )
   (
-  [graph-uri-fn query-fn rdf-store s]
+  [graph-uri query-fn rdf-store s]
   (let [query  (prefixed
                 (selmer/render query-for-p-o-template
-                               (merge (query-template-map graph-uri-fn rdf-store)
+                               (merge (query-template-map graph-uri rdf-store)
                                       {:subject (check-qname s)})))
         collect-bindings (fn [acc b]
                            (update acc (:p b)
@@ -451,16 +451,16 @@ Where:
   <p> is a predicate URI rendered per binding translator of <rdf-store>
   <rdf-store> is an RDF store
   <query-fn> := fn [repo] -> bindings
-  <graph-uri-fn> := [repo] -> Graph URI, or nil
+  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
   "
   ([query-fn rdf-store s p]
-   (query-for-o (fn [_] nil) query-fn rdf-store s p))
+   (query-for-o nil  query-fn rdf-store s p))
   
-  ([graph-uri-fn query-fn rdf-store s p]
+  ([graph-uri query-fn rdf-store s p]
    (let [query  (prefixed
                  (selmer/render
                   query-for-o-template
-                  (merge (query-template-map graph-uri-fn rdf-store)
+                  (merge (query-template-map graph-uri rdf-store)
                          {:subject (check-qname s)
                           :predicate (check-qname p)})))
         
@@ -491,18 +491,18 @@ Where:
 Where:
   <s> <p> <o> are subject, predicate and object
   <rdf-store> is an RDF store
-  <graph-uri-fn> := [repo] -> Graph URI, or nil
+  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
   <ask-fn> := fn [repo] -> bindings
 "
   ([ask-fn rdf-store s p o]
-   (ask-s-p-o (fn [_] nil) ask-fn rdf-store s p o)
+   (ask-s-p-o nil ask-fn rdf-store s p o)
    )
-  ([graph-uri-fn ask-fn rdf-store s p o]
+  ([graph-uri ask-fn rdf-store s p o]
   
   (let [query (prefixed
                (selmer/render
                 ask-s-p-o-template
-                (merge (query-template-map graph-uri-fn rdf-store)
+                (merge (query-template-map graph-uri rdf-store)
                        {:subject (check-qname s)
                         :predicate (check-qname p)
                         :object (if (keyword? o)

@@ -13,7 +13,8 @@ It includes:
    ;; [clojure.java.io :as io]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
-   [selmer.parser :as selmer]
+   ;; [selmer.parser :as selmer]
+   [cljstache.core :as stache]
    [taoensso.timbre :as timbre]
    [cognitect.transit :as transit]
    ;; ont-app
@@ -253,7 +254,7 @@ Where
   NOTE: this will be encoded on write and decoded on read by the
     cognitect/transit library."
   [x]
-  (selmer/render "\"{{x}}\"^^transit:json" {:x (render-transit-json x)}))
+  (stache/render "\"{{x}}\"^^transit:json" {:x (render-transit-json x)}))
 
 ;; RENDER LITERAL
 
@@ -311,8 +312,8 @@ Where
 (defn- query-template-map [graph-uri rdf-store]
   "Returns {<k> <v>, ...} appropriate for <rdf-store>
 Where
-<k> and <v> are selmer template parameters which may appear in some query, e.g.
-  named graph open/close clauses
+<k> and <v> are cljstache template parameters which may appear in some query, 
+  e.g. named graph open/close clauses
 <rdf-store> is an RDF store.
 "
   {:graph-name-open (if graph-uri
@@ -324,12 +325,13 @@ Where
    })                  
 
 (def subjects-query-template
+  ;; note the use of 3 brackets to turn off escaping
   "
   Select Distinct ?s Where
   {
-    {{graph-name-open|safe}}
+    {{{graph-name-open}}} 
     ?s ?p ?o.
-    {{graph-name-close|safe}}
+    {{{graph-name-close}}}
   }
   ")
 
@@ -347,7 +349,7 @@ Where
    )
   
   ([graph-uri query-fn rdf-store]
-   (let [query (selmer/render subjects-query-template
+   (let [query (stache/render subjects-query-template
                               (query-template-map graph-uri rdf-store))
          ]
      (map :s
@@ -358,9 +360,9 @@ Where
   Select ?s ?p ?o
   Where
   {
-    {{graph-name-open|safe}}
+    {{{graph-name-open}}}
     ?s ?p ?o
-    {{graph-name-close}}
+    {{{graph-name-close}}}
   }
   ")
 
@@ -395,7 +397,7 @@ Where
                              binding))))
           
           ]
-    (let [query (selmer/render normal-form-query-template
+    (let [query (stache/render normal-form-query-template
                                (query-template-map graph-uri rdf-store))
           ]
       (value-trace
@@ -444,9 +446,9 @@ about blank nodes not being supported as first-class identifiers."
   "
   Select ?p ?o Where
   {
-    {{graph-name-open|safe}}
-    {{subject|safe}} ?p ?o.
-    {{graph-name-close|safe}}
+    {{{graph-name-open}}}
+    {{{subject}}} ?p ?o.
+    {{{graph-name-close}}}
   }
   ")
 
@@ -466,7 +468,7 @@ Where
   (
   [graph-uri query-fn rdf-store s]
   (let [query  (prefixed
-                (selmer/render query-for-p-o-template
+                (stache/render query-for-p-o-template
                                (merge (query-template-map graph-uri rdf-store)
                                       {:subject (check-qname s)})))
         collect-bindings (fn [acc b]
@@ -485,9 +487,9 @@ Where
   "
   Select ?o Where
   {
-    {{graph-name-open|safe}}
-    {{subject|safe}} {{predicate|safe}} ?o.
-    {{graph-name-close|safe}}
+    {{{graph-name-open}}}
+    {{{subject}}} {{{predicate}}} ?o.
+    {{{graph-name-close}}}
   }
   ")
 
@@ -506,7 +508,7 @@ Where:
   
   ([graph-uri query-fn rdf-store s p]
    (let [query  (prefixed
-                 (selmer/render
+                 (stache/render
                   query-for-o-template
                   (merge (query-template-map graph-uri rdf-store)
                          {:subject (check-qname s)
@@ -527,8 +529,8 @@ Where:
 (def ask-s-p-o-template
   "ASK where
   {
-    {{graph-name-open|safe}}
-    {{subject|safe}} {{predicate|safe}} {{object|safe}}.
+    {{{graph-name-open}}}
+    {{{subject}}} {{{predicate}}} {{{object}}}.
     {{graph-name-close}}
   }"
   )
@@ -548,7 +550,7 @@ Where:
   ([graph-uri ask-fn rdf-store s p o]
   
   (let [query (prefixed
-               (selmer/render
+               (stache/render
                 ask-s-p-o-template
                 (merge (query-template-map graph-uri rdf-store)
                        {:subject (check-qname s)

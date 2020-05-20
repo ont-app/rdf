@@ -2,6 +2,7 @@
   (:require
    #?(:cljs [cljs.test :refer-macros [async deftest is testing]]
       :clj [clojure.test :refer :all])
+   [cljstache.core :as stache]
    [ont-app.rdf.core :as rdf-app]
    ))
 
@@ -44,4 +45,18 @@
       (is (= (round-trip f)
              f))
       )))
+
+(deftest selmer-to-cljstache
+  (testing "Using cljstache (instead of selmer) should work on clj(s)."
+    (is (= (stache/render rdf-app/subjects-query-template
+                          {:graph-name-open "GRAPH <http://example.com> {"
+                           :graph-name-close "}"
+                           })
+           "\n  Select Distinct ?s Where\n  {\n    GRAPH <http://example.com> { \n    ?s ?p ?o.\n    }\n  }\n  "))
+    (is (= (stache/render
+            rdf-app/subjects-query-template
+            {:graph-name-open ""
+             :graph-name-close ""
+             })
+           "\n  Select Distinct ?s Where\n  {\n     \n    ?s ?p ?o.\n    \n  }\n  "))))
 

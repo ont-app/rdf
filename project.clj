@@ -12,7 +12,8 @@
                  [com.cognitect/transit-cljs "0.8.264"]
                  [com.taoensso/timbre "4.10.0"]
                  [lein-doo "0.1.11"]
-                 [selmer "1.12.23"]
+                 ;; [selmer "1.12.23"]
+                 [cljstache "2.0.5"]
                  ;; Ont-app libs
                  [ont-app/graph-log "0.1.1-SNAPSHOT"]
                  [ont-app/igraph "0.1.5-SNAPSHOT"]

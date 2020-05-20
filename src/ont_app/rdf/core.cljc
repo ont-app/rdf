@@ -10,7 +10,7 @@ It includes:
    }
   (:require
    [clojure.string :as s]
-   [clojure.java.io :as io]
+   ;; [clojure.java.io :as io]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
    [selmer.parser :as selmer]
@@ -18,15 +18,17 @@ It includes:
    [cognitect.transit :as transit]
    ;; ont-app
    [ont-app.graph-log.core :as glog]
-   [ont-app.graph-log.levels :as levels :refer :all]
-   [ont-app.igraph.core :as igraph :refer :all]
+   [ont-app.graph-log.levels :as levels
+    :refer [warn debug trace value-trace value-debug]]
+   [ont-app.igraph.core :as igraph]
    [ont-app.igraph.graph :as graph]
    [ont-app.vocabulary.core :as voc]
    ;; local
    [ont-app.rdf.ont :as ont]
    )
-   (:import [java.io ByteArrayInputStream ByteArrayOutputStream])
-            
+  #?(:clj
+     (:import #?(:clj [java.io ByteArrayInputStream ByteArrayOutputStream]))
+     )
   )
 
 (voc/cljc-put-ns-meta!
@@ -72,6 +74,54 @@ It includes:
 (derive #?(:clj clojure.lang.LazySeq
            :cljs cljs.core.LazySeq )
         :rdf-app/TransitData)
+
+(declare transit-read-handlers)
+(defn read-transit-json
+  "Returns a value parsed from transit string `s`
+  Where
+  <s> is a &quot;-escaped string encoded as transit
+  Note: custom datatypes will be informed by @transit-read-handlers
+  "
+     [^String s]
+     #?(:clj
+        (transit/read
+         (transit/reader
+          (ByteArrayInputStream. (.getBytes (clojure.string/replace
+                                             s
+                                             "&quot;" "\"")
+                                            "UTF-8"))
+          :json
+          {:handlers @transit-read-handlers}))
+        :cljs
+        (transit/read
+         (transit/reader
+          :json
+          {:handlers @transit-read-handlers})
+         (clojure.string/replace
+          s
+          "&quot;" "\""))))
+
+
+(declare transit-write-handlers)
+(defn render-transit-json 
+  "Returns a string of transit for `value`
+  Where
+  <value> is any value that be handled by cognitict/transit
+  Note: custom datatypes will be informed by @transit-write-handlers
+  "
+  [value]
+  #?(:clj
+     (let [output-stream (ByteArrayOutputStream.)
+           ]
+       (transit/write
+        (transit/writer output-stream :json {:handlers @transit-write-handlers})
+        value)
+       (String. (.toByteArray output-stream)))
+     :cljs
+     (transit/write
+      (transit/writer :json {:handlers @transit-write-handlers})
+      value)))
+
 
 ;; NO READER MACROS BEYOND THIS POINT
 
@@ -153,7 +203,7 @@ Where
     }))
 
   
-(defn render-transit-json 
+#_(defn render-transit-json 
   "Returns a string of transit for `value`
   Where
   <value> is any value that be handled by cognitict/transit
@@ -184,7 +234,7 @@ Where
     }
     ))
 
-(defn read-transit-json
+#_(defn read-transit-json
   "Returns a value parsed from transit string `s`
   Where
   <s> is a &quot;-escaped string encoded as transit
@@ -229,8 +279,6 @@ Where
      special-dispatch
      ;; else no special dispatch...
    (cond
-     ;; (inst? literal) ::instant
-     ;; (endpoint/xsd-type-uri literal) ::xsd-type
      (instance? LangStr literal) ::LangStr
      :default (type literal)))))
 

@@ -9,6 +9,7 @@
                  ;; 3rd party libs
                  [cheshire "5.10.0"]
                  [com.cognitect/transit-clj "1.0.324"]
+                 [com.cognitect/transit-cljs "0.8.264"]
                  [com.taoensso/timbre "4.10.0"]
                  [lein-doo "0.1.11"]
                  [selmer "1.12.23"]

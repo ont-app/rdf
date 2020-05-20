@@ -116,7 +116,7 @@ appropriate.
 The existing `sparql-client` and `igraph-grafter` implementations
 should serve as instructive examples.
 
-<a name="h3-transit-encoded-values></a>
+<a name="h3-transit-encoded-values"></a>
 ### Transit-encoded values
 
 Of course some values such as the standard Clojure containers, and

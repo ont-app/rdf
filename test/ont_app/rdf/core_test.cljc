@@ -2,17 +2,23 @@
   (:require
    #?(:cljs [cljs.test :refer-macros [async deftest is testing]]
       :clj [clojure.test :refer :all])
+   [clojure.string :as str]
    [cljstache.core :as stache]
+   [ont-app.rdf.lstr :as lstr]
    [ont-app.rdf.core :as rdf-app]
    ))
 
+
+
 (deftest language-tagged-strings
-  (testing "langstr disptach"
+  (testing "langstr dispatch"
     (let [x #lstr "asdf@en"]
       (is (= (str x) "asdf"))
-      (is (= (rdf-app/lang x) "en"))
+      (is (= (lstr/lang x) "en"))
       (is (= (rdf-app/render-literal-dispatch x)
-             ::rdf-app/LangStr)))))
+             :rdf-app/LangStr))
+      )))
+
 
 (deftest transit
   (testing "transit encoding/decoding"
@@ -23,6 +29,8 @@
                        (rdf-app/read-transit-json
                         ((re-matches rdf-app/transit-re
                                      (rdf-app/render-literal x)) 1)))
+          order-neutral (fn [s] (str/replace s #"[0-9]" "<number>"))
+          cljs-ns->clojure-ns (fn [s] (str/replace s #"cljs" "clojure"))
           ]
       (is (parents (rdf-app/render-literal-dispatch v))
           :rdf-app/TransitData)
@@ -34,13 +42,13 @@
              v))
       (is (parents (rdf-app/render-literal-dispatch s))
           :rdf-app/TransitData)
-      (is (= (rdf-app/render-literal s)
-             "\"[&quot;~#set&quot;,[1,3,2]]\"^^transit:json"))
+      (is (= (order-neutral (str (rdf-app/render-literal s)))
+             (str "\"[&quot;~#set&quot;,[<number>,<number>,<number>]]\"^^transit:json")))
       (is (= (round-trip s)
              s))
       (is (parents (rdf-app/render-literal-dispatch f))
           :rdf-app/TransitData)
-      (is (= (rdf-app/render-literal f)
+      (is (= (cljs-ns->clojure-ns (rdf-app/render-literal f))
              "\"[&quot;~#list&quot;,[&quot;~$clojure.core/fn&quot;,[&quot;~$ont-app.rdf.core-test/x&quot;],&quot;yowsa&quot;]]\"^^transit:json"))
       (is (= (round-trip f)
              f))

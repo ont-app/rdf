@@ -1,3 +1,3 @@
 {
- lstr ont-app.rdf.core/read-LangStr
+ lstr ont-app.rdf.lstr/read-LangStr
 }

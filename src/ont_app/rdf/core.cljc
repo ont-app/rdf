@@ -15,22 +15,25 @@ It includes:
    ;; 3rd party
    ;; [selmer.parser :as selmer]
    [cljstache.core :as stache]
-   [taoensso.timbre :as timbre]
+   ;; [taoensso.timbre :as timbre]
    [cognitect.transit :as transit]
    ;; ont-app
    [ont-app.graph-log.core :as glog]
-   [ont-app.graph-log.levels :as levels
-    :refer [warn debug trace value-trace value-debug]]
+   #?(:clj [ont-app.graph-log.levels :as levels
+            :refer [warn debug trace value-trace value-debug]]
+      :cljs [ont-app.graph-log.levels :as levels
+            :refer-macros [warn debug trace value-trace value-debug]])
    [ont-app.igraph.core :as igraph]
    [ont-app.igraph.graph :as graph]
    [ont-app.vocabulary.core :as voc]
    ;; local
+   [ont-app.rdf.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
    )
   #?(:clj
-     (:import #?(:clj [java.io ByteArrayInputStream ByteArrayOutputStream]))
-     )
-  )
+     (:import
+      [java.io ByteArrayInputStream ByteArrayOutputStream]
+      )))
 
 (voc/cljc-put-ns-meta!
  'ont-app.rdf.core
@@ -38,6 +41,9 @@ It includes:
   :voc/mapsTo 'ont-app.rdf.ont
   }
  )
+
+;; aliases 
+(def prefixed voc/prepend-prefix-declarations)
 
 (def ontology @ont/ontology-atom)
 
@@ -102,7 +108,6 @@ It includes:
           s
           "&quot;" "\""))))
 
-
 (declare transit-write-handlers)
 (defn render-transit-json 
   "Returns a string of transit for `value`
@@ -123,19 +128,20 @@ It includes:
       (transit/writer :json {:handlers @transit-write-handlers})
       value)))
 
-
-;; NO READER MACROS BEYOND THIS POINT
-
-
-(def prefixed voc/prepend-prefix-declarations)
-
-
 ;; SPECS
 (def transit-re
   "Matches data tagged as transit:json"
   #"^\"(.*)\"\^\^transit:json$")
 
 (spec/def ::transit-tag (spec/and string? (fn [s] (re-matches transit-re s))))
+
+(defn bnode-kwi?
+  "True when `kwi` matches output of `bnode-translator`."
+  [kwi]
+  (->> (namespace kwi)
+       (re-matches #"^_.*"))) 
+
+(spec/def ::bnode-kwi bnode-kwi?)
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; LITERAL SUPPORT
@@ -151,42 +157,6 @@ Where
    (str "\"" s "\"")
    ))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; LANGSTR
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(deftype LangStr [s lang]
-  Object
-  (toString [_] s)
-  (equals [this that]
-    (and (instance? LangStr that)
-         (= s (.s that))
-         (= lang (.lang that)))))
-
-
-(defn lang [langStr]
-  "returns the language tag associated with `langStr`"
-  (.lang langStr))
-
-(defmethod print-method LangStr
-  [literal ^java.io.Writer w]
-  (.write w (str "#lstr \"" literal "@" (.lang literal) "\"")))
-
-(defmethod print-dup LangStr [o ^java.io.Writer w]
-  (print-method o w))
-
-(defn ^LangStr read-LangStr [form]
-  (let [langstring-re #"^(.*)@([-a-zA-Z]+)" 
-        m (re-matches langstring-re form)
-        ]
-    (when (not= (count m) 3)
-      (throw (ex-info "Bad LangString fomat"
-                      {:type ::BadLangstringFormat
-                       :regex langstring-re
-                       :form form})))
-    (let [[_ s lang] m]
-      (LangStr. s lang))))
-
-
 (def transit-write-handlers
   "Atom of the form {<Class> <write-handler>, ...}
   Where
@@ -194,30 +164,14 @@ Where
   <write-handler> := fn [s] -> {<field> <value>, ...}
   " 
   (atom
-   {LangStr
+   {ont_app.rdf.lstr.LangStr
     (cognitect.transit/write-handler
-     "ont-app.rdf.core.LangStr"
+     "ont-app.rdf.lstr.LangStr"
      (fn [ls]
        {:lang (.lang ls)
         :s (.s ls)
         }))
     }))
-
-  
-#_(defn render-transit-json 
-  "Returns a string of transit for `value`
-  Where
-  <value> is any value that be handled by cognitict/transit
-  Note: custom datatypes will be informed by @transit-write-handlers
-  "
-  [value]
-  (let [output-stream (ByteArrayOutputStream.)
-        ]
-    (transit/write
-     (transit/writer output-stream :json {:handlers @transit-write-handlers})
-     value)
-    (String. (.toByteArray output-stream))))
-
 
 (def transit-read-handlers
   "Atom of the form {<className> <read-handler>
@@ -228,26 +182,13 @@ Where
     write-handler in @`transit-write-handlers`.
   "
   (atom
-   {"ont-app.rdf.core.LangStr"
+   {"ont-app.rdf.lstr.LangStr"
     (cognitect.transit/read-handler
      (fn [from-rep]
        (->LangStr (:s from-rep) (:lang from-rep))))
     }
     ))
 
-#_(defn read-transit-json
-  "Returns a value parsed from transit string `s`
-  Where
-  <s> is a &quot;-escaped string encoded as transit
-  Note: custom datatypes will be informed by @transit-read-handlers
-  "
-  [^String s]
-  (transit/read
-   (transit/reader
-    (ByteArrayInputStream. (.getBytes (clojure.string/replace s "&quot;" "\"")
-                                      "UTF-8"))
-    :json
-    {:handlers @transit-read-handlers})))
 
 (defn render-literal-as-transit-json
   "Returns 'x^^transit:json'
@@ -263,30 +204,30 @@ Where
   Where
   <x> is any value, probabaly an RDF literal
   <dispatch-value> is a value to be matched to a render-literal-dispatch method.
-  Default is to return nil."
+  Default is to return nil, signalling no special dispatch."
   (atom (fn [_] nil)))
 
 (defn render-literal-dispatch
   "Returns a key for the render-literal method to dispatch on given `literal`
   Where
   <literal> is any non-keyword
-  NOTE: ::instant and ::xsd-type are special cases, otherwise (type <literal>)
+  NOTE: LangStr and non-nil `special-dispatch` are special cases; otherwise
+    (type <literal>)
   "
   [literal]
   (value-trace
    ::RenderLiteralDispatch
-   [:log/iteral literal]
+   [:log/literal literal]
    (if-let [special-dispatch (@special-literal-dispatch literal)]
      special-dispatch
      ;; else no special dispatch...
    (cond
-     (instance? LangStr literal) ::LangStr
+     (instance? ont_app.rdf.lstr.LangStr literal) :rdf-app/LangStr
      :default (type literal)))))
 
 (defmulti render-literal
   "Returns an RDF (Turtle) rendering of `literal`"
   render-literal-dispatch)
-
 
 (defmethod render-literal :rdf-app/TransitData
   [v]
@@ -296,14 +237,6 @@ Where
   [s]
   (quote-str s))
 
-
-(defn bnode-kwi?
-  "True when `kwi` matches output of `bnode-translator`."
-  [kwi]
-  (->> (namespace kwi)
-       (re-matches #"^_.*")))
-
-(spec/def ::bnode-kwi bnode-kwi?)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; STANDARD TEMPLATES FOR IGRAPH MEMBER ACCESS
@@ -568,4 +501,8 @@ Where:
      ::ask-s-p-o-return
      [:log/resultOf starting]
      (ask-fn rdf-store query)))))
+
+
+
+
 

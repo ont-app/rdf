@@ -10,23 +10,20 @@
 ;; LANGSTR
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(deftype LangStr [s lang]
-  Object
-  (toString [_] s)
-  
-  IEquiv
-  (-equiv [this that]
-    (and (instance? LangStr that)
-         (= s (.-s that))
-         (= lang (.-lang that))))
+(defrecord LangStr [s lang])
 
-  IPrintWithWriter
+(extend-protocol Object
+  LangStr
+  (toString [this] (:s this)))
+
+(extend-protocol  IPrintWithWriter
+  LangStr
   (-pr-writer [this writer opts]
-    (write-all writer "#lstr \"" (.toString this) "@" (.-lang this) "\"")))
+    (write-all writer "#lstr \"" (str this) "@" (:lang this) "\"")))
 
 (defn lang [langStr]
   "returns the language tag associated with `langStr`"
-  (.-lang langStr))
+  (:lang langStr))
 
 (defn read-LangStr [form]
   (let [langstring-re #"^(.*)@([-a-zA-Z]+)" 
@@ -40,5 +37,3 @@
     (let [[_ s lang] m]
       (->LangStr s lang))))
 
-(defn testfn [x]
-  "blah")

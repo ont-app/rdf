@@ -1,5 +1,5 @@
 (defproject ont-app/rdf "0.1.0-SNAPSHOT"
-  :description "FIXME"
+  :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -32,7 +32,6 @@
             [lein-cljsbuild "1.1.7"
              :exclusions [[org.clojure/clojure]]]
             [lein-doo "0.1.11"]
-            [lein-ancient "0.6.15"]
             ]
   :source-paths ["src"]
   :test-paths ["src" "test"]

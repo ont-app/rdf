@@ -34,7 +34,8 @@ Require thus:
 The namepace metadata of the core maps to `ont-app.rdf.ont`, whose
 preferred prefix is `rdf-app` (since `rdf` is already spoken for).
 
-The base URI is declared as `http://rdf.naturallexicon.org/ns/cognitect.transit#`
+The preferred namespace URI is declared as
+`"http://rdf.naturallexicon.org/rdf/ont#"`.
     
 <a name="h2-motivation"></a>
 ## Motivation

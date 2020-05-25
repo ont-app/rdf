@@ -3,7 +3,6 @@
    ;;
    [ont-app.igraph.core :as igraph :refer [add]]
    [ont-app.igraph.graph :as g :refer [make-graph]]
-   [ont-app.igraph-vocabulary.core :as igv]
    [ont-app.vocabulary.core :as voc]
    )
   )
@@ -12,12 +11,43 @@
  {
   :vann/preferredNamespacePrefix "rdf-app"
   :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/rdf/ont#"
+  :doc "Namespace for constructs used by RDF-based Igraph implementations"
+  :dc/description "Namespace for constructs used by RDF-based Igraph implementations in Clojure."
+  :dc/creator "Eric D. Scott"
   })
 
 (def ontology-atom (atom (make-graph)))
 
 (defn update-ontology! [to-add]
   (swap! ontology-atom add to-add))
+
+;; LITERAL TYPES
+(update-ontology!
+ [[:rdf-app/LiteralType
+   :rdf/type :rdfs/Class
+   :rdfs/comment "Refers to a type of literal which may have its own 
+render-literal method."
+   ]
+  [:rdf-app/Instant
+   :rdf/type :rdf-app/LiteralType
+   :rdfs/comment "A dispatch value for Clojure instants"
+   ]
+  [:rdf-app/XsdDatatype
+   :rdf/type :rdf-app/LiteralType
+   :rdfs/comment "A dispatch value for literals tagged as xsd datatypes."
+   ]
+  [:rdf-app/LangStr
+   :rdf/type :rdf-app/LiteralType
+   :rdfs/comment "A dispatch value for literals encoded as a language-tagged 
+   string"
+   ]
+  [:rdf-app/TransitData
+   :rdf/type :rdf-app/LiteralType
+   :rdfs/comment "Refers to Clojure data which should be encoded/decoded as 
+transit via a `derive` statement. There is a render-literal keyed to the KWI 
+for this class."
+   ]
+  ])
 
 
 ;; TRANSIT SUPPORT
@@ -38,7 +68,7 @@
    ]
   [:transit/format
    :rdfs/domain :igraph/SerializationFormat
-   :rdfs/range :rdf-app/Literal
+   :rdfs/range :rdf/Literal
    :rdfs/comment "Asserts the name of the transit encoding format"
    ]
   [:transit/json
@@ -56,11 +86,5 @@
    :rdfs/comment "Refers to the Transit data encoded as msgpack. Literals whose 
   :datatype metadata is :transit/msgpack should be readable with transit/read 
    encoded for format :msgpack (not currently supported)"
-   ]
-  [:rdf-app/TransitData
-   :rdf/type :rdf/Class
-   :rdfs/comment "Refers to Clojure data which should be encoded/decoded as 
-transit via a `derive` statement. There is a render-literal keyed to the KWI 
-for this class."
    ]
   ])

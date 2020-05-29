@@ -94,13 +94,11 @@ There is an atom defined called `special-literal-dispatch` (defult nil) which if
 <a name="h3-language-tagged-strings"></a>
 ### Language-tagged strings
 
-RDF entails use of language-tagged strings (e.g. `"gaol"@en-GB`) when
-providing natural-language content. Typing this directly in Clojure code is a bit a bit awkward, since the inner quotes would need to be escaped. 
+This library imports 'ont-app.vocabulary.lstr', along with its #lstr
+reader macro.
 
-This library defines a reader macro `#lstr` and accompanying record _LangStr_ to facilitate wriing language-tagged strings in clojure. The value above for example would be written: `#lstr "gaol@en-GB"`.
-
-Such values will be dispatched to _render-literal_ as _:rdf/LangStr_, but the
-_render-literal_ method for LangStr is expected to be
+Such values will be dispatched to _render-literal_ as _:rdf/LangStr_,
+but the _render-literal_ method for LangStr is expected to be
 platform-sepcific.
 
 <a name="h3-xsd-values"></a>

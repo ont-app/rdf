@@ -4,7 +4,7 @@
       :clj [clojure.test :refer :all])
    [clojure.string :as str]
    [cljstache.core :as stache]
-   [ont-app.rdf.lstr :as lstr]
+   [ont-app.vocabulary.lstr :as lstr]
    [ont-app.rdf.core :as rdf-app]
    ))
 

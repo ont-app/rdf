@@ -27,7 +27,7 @@ It includes:
    [ont-app.igraph.graph :as graph]
    [ont-app.vocabulary.core :as voc]
    ;; local
-   [ont-app.rdf.lstr :as lstr :refer [->LangStr]]
+   [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
    )
   #?(:clj
@@ -164,9 +164,9 @@ Where
   <write-handler> := fn [s] -> {<field> <value>, ...}
   " 
   (atom
-   {ont_app.rdf.lstr.LangStr
+   {ont_app.vocabulary.lstr.LangStr
     (cognitect.transit/write-handler
-     "ont-app.rdf.lstr.LangStr"
+     "ont-app.vocabulary.lstr.LangStr"
      (fn [ls]
        {:lang (.lang ls)
         :s (.s ls)
@@ -182,7 +182,7 @@ Where
     write-handler in @`transit-write-handlers`.
   "
   (atom
-   {"ont-app.rdf.lstr.LangStr"
+   {"ont-app.vocabulary.lstr.LangStr"
     (cognitect.transit/read-handler
      (fn [from-rep]
        (->LangStr (:s from-rep) (:lang from-rep))))
@@ -222,7 +222,7 @@ Where
      special-dispatch
      ;; else no special dispatch...
    (cond
-     (instance? ont_app.rdf.lstr.LangStr literal) :rdf-app/LangStr
+     (instance? ont_app.vocabulary.lstr.LangStr literal) :rdf-app/LangStr
      :default (type literal)))))
 
 (defmulti render-literal

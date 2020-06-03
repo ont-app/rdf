@@ -1,3 +1,5 @@
+<img src="http://ericdscott.com/NaturalLexiconLogo.png" alt="NaturalLexicon logo" :width=100 height=100/>
+
 # ont-app/rdf
 
 A backstop for shared logic between rdf-based implementations of IGraph.
@@ -8,7 +10,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 - [Dependencies](#h2-dependencies)
 - [Motivation](#h2-motivation)
 - [Literals](#h2-literals)
-  - [The `render-literal` multimethod](#h3-render-literal-mulitmethod)
+  - [The `render-literal` multimethod](#h3-render-literal-multimethod)
     - [`@special-literal-dispatch`](#h4-special-literal-dispatch)
   - [Language-tagged strings](#h3-language-tagged-strings)
   - [`xsd` values](#h3-xsd-values)
@@ -17,7 +19,6 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 
 <a name="h2-dependencies"></a>
 ## Dependencies
-
 
 ```
 [ont-app/rdf "0.1.0-SNAPSHOT"]
@@ -218,3 +219,15 @@ Public License, v. 2.0 are satisfied: GNU General Public License as published by
 the Free Software Foundation, either version 2 of the License, or (at your
 option) any later version, with the GNU Classpath Exception which is available
 at https://www.gnu.org/software/classpath/license.html.
+
+
+<table>
+<tr>
+<td width=75>
+<img src="http://ericdscott.com/NaturalLexiconLogo.png" alt="Natural Lexicon logo" :width=50 height=50/> </td>
+<td>
+<p>Natural Lexicon logo - Copyright © 2020 Eric D. Scott. Artwork by Athena M. Scott.</p>
+<p>Released under <a href="https://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International license</a>. Under the terms of this license, if you display this logo or derivates thereof, you must include an attribution to the original source, with a link to https://github.com/ont-app, or  http://ericdscott.com. </p> 
+</td>
+</tr>
+<table>

@@ -147,11 +147,12 @@ It includes:
 ;; LITERAL SUPPORT
 ;;;;;;;;;;;;;;;;;;;;
 
-(defn quote-str [s]
+(defn quote-str 
   "Returns `s`, in escaped quotation marks.
 Where
 <s> is a string, typically to be rendered in a query or RDF source.
 "
+  [s]
   (value-trace
    ::QuoteString
    (str "\"" s "\"")
@@ -242,13 +243,14 @@ Where
 ;; STANDARD TEMPLATES FOR IGRAPH MEMBER ACCESS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- query-template-map [graph-uri rdf-store]
+(defn- query-template-map 
   "Returns {<k> <v>, ...} appropriate for <rdf-store>
 Where
 <k> and <v> are cljstache template parameters which may appear in some query, 
   e.g. named graph open/close clauses
 <rdf-store> is an RDF store.
 "
+  [graph-uri rdf-store]
   {:graph-name-open (if graph-uri
                       (str "GRAPH <" (voc/iri-for graph-uri) "> {")
                       "")
@@ -355,9 +357,10 @@ Where
   kwi)
 
 
-(defn check-qname [uri-spec]
+(defn check-qname 
   "Traps the keyword assertion error in voc and throws a more meaningful error 
 about blank nodes not being supported as first-class identifiers."
+  [uri-spec]
   (if (bnode-kwi? uri-spec)
     uri-spec
     ;;else not a blank node

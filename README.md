@@ -1,6 +1,4 @@
-<img src="http://ericdscott.com/NaturalLexiconLogo.png" alt="NaturalLexicon logo" :width=100 height=100/>
-
-# ont-app/rdf
+# <img src="http://ericdscott.com/NaturalLexiconLogo.png" alt="NaturalLexicon logo" :width=100 height=100/> ont-app/rdf
 
 A backstop for shared logic between rdf-based implementations of IGraph.
 

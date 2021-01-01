@@ -1,4 +1,4 @@
-(defproject ont-app/rdf "0.1.1-SNAPSHOT"
+(defproject ont-app/rdf "0.1.1"
   :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
@@ -20,8 +20,8 @@
                  ;; Ont-app libs
                  [ont-app/graph-log "0.1.1"]
                  [ont-app/igraph "0.1.5"]
-                 [ont-app/igraph-vocabulary "0.1.1"]
-                 [ont-app/vocabulary "0.1.1"]
+                 [ont-app/igraph-vocabulary "0.1.2"]
+                 [ont-app/vocabulary "0.1.2"]
                  ]
   
   ;; :main ^:skip-aot ont-app.rdf.core

@@ -35,7 +35,7 @@ It includes:
       [java.io ByteArrayInputStream ByteArrayOutputStream]
       )))
 
-(voc/cljc-put-ns-meta!
+(voc/put-ns-meta!
  'ont-app.rdf.core
  {
   :voc/mapsTo 'ont-app.rdf.ont

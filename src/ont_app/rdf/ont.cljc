@@ -6,7 +6,7 @@
    [ont-app.vocabulary.core :as voc]
    )
   )
-(voc/cljc-put-ns-meta!
+(voc/put-ns-meta!
  'ont-app.rdf.ont
  {
   :vann/preferredNamespacePrefix "rdf-app"

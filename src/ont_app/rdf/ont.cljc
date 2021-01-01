@@ -18,7 +18,7 @@
 
 (def ontology-atom (atom (make-graph)))
 
-(defn update-ontology! [to-add]
+(defn ^:private update-ontology! [to-add]
   (swap! ontology-atom add to-add))
 
 ;; LITERAL TYPES

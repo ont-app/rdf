@@ -57,15 +57,24 @@
              f))
       )))
 
+(def test-query-template "
+  Select Distinct ?s Where
+  {
+    {{{graph-name-open}}} 
+    ?s ?p ?o.
+    {{{graph-name-close}}}
+  }
+  ")
+
 (deftest selmer-to-cljstache
   (testing "Using cljstache (instead of selmer) should work on clj(s)."
-    (is (= (stache/render rdf-app/subjects-query-template
+    (is (= (stache/render test-query-template
                           {:graph-name-open "GRAPH <http://example.com> {"
                            :graph-name-close "}"
                            })
            "\n  Select Distinct ?s Where\n  {\n    GRAPH <http://example.com> { \n    ?s ?p ?o.\n    }\n  }\n  "))
     (is (= (stache/render
-            rdf-app/subjects-query-template
+            test-query-template
             {:graph-name-open ""
              :graph-name-close ""
              })

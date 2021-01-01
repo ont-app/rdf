@@ -43,9 +43,15 @@ It includes:
  )
 
 ;; aliases 
-(def prefixed voc/prepend-prefix-declarations)
+(def prefixed
+  "Returns `query`, with prefixe declarations prepended
+  Where
+  - `query` is a SPARQL query"
+  voc/prepend-prefix-declarations)
 
-(def ontology @ont/ontology-atom)
+(def ontology
+  "The supporting vocabulary for the RDF module"
+  @ont/ontology-atom)
 
 ;; FUN WITH READER MACROS
 
@@ -86,7 +92,7 @@ It includes:
 (defn read-transit-json
   "Returns a value parsed from transit string `s`
   Where
-  <s> is a &quot;-escaped string encoded as transit
+  `s` is a &quot;-escaped string encoded as transit
   Note: custom datatypes will be informed by @transit-read-handlers
   "
      [^String s]
@@ -112,7 +118,7 @@ It includes:
 (defn render-transit-json 
   "Returns a string of transit for `value`
   Where
-  <value> is any value that be handled by cognitict/transit
+  `value` is any value that be handled by cognitict/transit
   Note: custom datatypes will be informed by @transit-write-handlers
   "
   [value]
@@ -150,7 +156,7 @@ It includes:
 (defn quote-str 
   "Returns `s`, in escaped quotation marks.
 Where
-<s> is a string, typically to be rendered in a query or RDF source.
+`s` is a string, typically to be rendered in a query or RDF source.
 "
   [s]
   (value-trace
@@ -159,10 +165,10 @@ Where
    ))
 
 (def transit-write-handlers
-  "Atom of the form {<Class> <write-handler>, ...}
+  "Atom of the form {`Class` `write-handler`, ...}
   Where
-  <Class> is a direct reference to the class instance to be encoded
-  <write-handler> := fn [s] -> {<field> <value>, ...}
+  `Class` is a direct reference to the class instance to be encoded
+  `write-handler` := fn [s] -> {`field` `value`, ...}
   " 
   (atom
    {ont_app.vocabulary.lstr.LangStr
@@ -175,11 +181,11 @@ Where
     }))
 
 (def transit-read-handlers
-  "Atom of the form {<className> <read-handler>
+  "Atom of the form {`className` `read-handler`
   Where
-  <className> is a fully qualified string naming a class to be encoded
-  <read-handler> := fn [from-rep] -> <instance>
-  <from-rep> := an Object s.t. (<field> from-rep), encoded in corresponding
+  `className` is a fully qualified string naming a class to be encoded
+  `read-handler` := fn [from-rep] -> `instance`
+  `from-rep` := an Object s.t. (`field` from-rep), encoded in corresponding
     write-handler in @`transit-write-handlers`.
   "
   (atom
@@ -201,19 +207,19 @@ Where
 ;; RENDER LITERAL
 
 (def special-literal-dispatch
-  "A function [x] -> <dispatch-value>
+  "A function [x] -> `dispatch-value`
   Where
-  <x> is any value, probabaly an RDF literal
-  <dispatch-value> is a value to be matched to a render-literal-dispatch method.
+  `x` is any value, probabaly an RDF literal
+  `dispatch-value` is a value to be matched to a render-literal-dispatch method.
   Default is to return nil, signalling no special dispatch."
   (atom (fn [_] nil)))
 
 (defn render-literal-dispatch
   "Returns a key for the render-literal method to dispatch on given `literal`
   Where
-  <literal> is any non-keyword
+  `literal` is any non-keyword
   NOTE: LangStr and non-nil `special-dispatch` are special cases; otherwise
-    (type <literal>)
+    (type `literal`)
   "
   [literal]
   (value-trace
@@ -244,11 +250,11 @@ Where
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- query-template-map 
-  "Returns {<k> <v>, ...} appropriate for <rdf-store>
+  "Returns {`k` `v`, ...} appropriate for `rdf-store`
 Where
-<k> and <v> are cljstache template parameters which may appear in some query, 
+`k` and `v` are cljstache template parameters which may appear in some query, 
   e.g. named graph open/close clauses
-<rdf-store> is an RDF store.
+`rdf-store` is an RDF store.
 "
   [graph-uri rdf-store]
   {:graph-name-open (if graph-uri
@@ -259,7 +265,7 @@ Where
                       "")
    })                  
 
-(def subjects-query-template
+(def ^:private subjects-query-template
   ;; note the use of 3 brackets to turn off escaping
   "
   Select Distinct ?s Where
@@ -271,13 +277,13 @@ Where
   ")
 
 (defn query-for-subjects 
-  "Returns [<subject> ...] at endpoint of `rdf-store`
+  "Returns [`subject` ...] at endpoint of `rdf-store`
 Where
-  <subject> is the uri of a subject from <rdf-store>, 
-  rendered per the binding translator of <rdf-store>
-  <rdf-store> conforms to ::sparql-client spec
-  <query-fn> := fn [repo] -> bindings
-  <graph-uri> is a URI  or KWI naming the graph  (or nil if DEFAULT graph)
+  `subject` is the uri of a subject from `rdf-store`, 
+  rendered per the binding translator of `rdf-store`
+  `rdf-store` conforms to ::sparql-client spec
+  `query-fn` := fn [repo] -> bindings
+  `graph-uri` is a URI  or KWI naming the graph  (or nil if DEFAULT graph)
 "
   ([query-fn rdf-store]
    (query-for-subjects (fn [_] nil) query-fn rdf-store)
@@ -290,7 +296,7 @@ Where
      (map :s
           (query-fn rdf-store query)))))
 
-(def normal-form-query-template
+(def ^:private normal-form-query-template
   "
   Select ?s ?p ?o
   Where
@@ -302,14 +308,14 @@ Where
   ")
 
 (defn query-for-normal-form
-  "Returns IGraph normal form for <graph> named by `graph-uri` in `rdf-store`
+  "Returns IGraph normal form for `graph` named by `graph-uri` in `rdf-store`
   Where
-  <graph> is a named graph in <rdf-store>
-  <graph-uri> is a URI or KWI naming the graph (default nil -> DEFAULT graph)
-  <rdf-store> is an RDF store 
-  <query-fn> := fn [rdf-store sparql-query] -> #{<bmap>, ...}
-  <bmap> := {:?s :?p :?o}
-  <sparql-query> :- `normal-form-query-template`
+  `graph` is a named graph in `rdf-store`
+  `graph-uri` is a URI or KWI naming the graph (default nil -> DEFAULT graph)
+  `rdf-store` is an RDF store 
+  `query-fn` := fn [rdf-store sparql-query] -> #{`bmap`, ...}
+  `bmap` := {:?s :?p :?o}
+  `sparql-query` :- `normal-form-query-template`
   "
   ([query-fn rdf-store]
    (query-for-normal-form nil query-fn rdf-store))
@@ -378,7 +384,7 @@ about blank nodes not being supported as first-class identifiers."
           ;; else it's some other message
           (throw e))))))
 
-(def query-for-p-o-template
+(def ^:private query-for-p-o-template
   "
   Select ?p ?o Where
   {
@@ -389,14 +395,14 @@ about blank nodes not being supported as first-class identifiers."
   ")
 
 (defn query-for-p-o 
-  "Returns {<p> #{<o>...}...} for `s` at endpoint of `rdf-store`
+  "Returns {`p` #{`o`...}...} for `s` at endpoint of `rdf-store`
 Where
-  <p> is a predicate URI rendered per binding translator of <rdf-store>
-  <o> is an object value, rendered per the binding translator of <rdf-store>
-  <s> is a subject uri keyword. ~ voc/voc-re
-  <rdf-store> is and RDF store.
-  <query-fn> := fn [repo] -> bindings
-  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  `p` is a predicate URI rendered per binding translator of `rdf-store`
+  `o` is an object value, rendered per the binding translator of `rdf-store`
+  `s` is a subject uri keyword. ~ voc/voc-re
+  `rdf-store` is and RDF store.
+  `query-fn` := fn [repo] -> bindings
+  `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
 "
   ([query-fn rdf-store s]
    (query-for-p-o nil  query-fn rdf-store s)
@@ -419,7 +425,7 @@ Where
              (query-fn rdf-store query))))))
 
 
-(def query-for-o-template
+(def ^:private query-for-o-template
   "
   Select ?o Where
   {
@@ -430,14 +436,14 @@ Where
   ")
 
 (defn query-for-o 
-  "Returns #{<o>...} for `s` and `p` at endpoint of `rdf-store`
+  "Returns #{`o`...} for `s` and `p` at endpoint of `rdf-store`
 Where:
-  <o> is an object rendered per binding translator of <rdf-store>
-  <s> is a subject URI rendered per binding translator of <rdf-store>
-  <p> is a predicate URI rendered per binding translator of <rdf-store>
-  <rdf-store> is an RDF store
-  <query-fn> := fn [repo] -> bindings
-  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  `o` is an object rendered per binding translator of `rdf-store`
+  `s` is a subject URI rendered per binding translator of `rdf-store`
+  `p` is a predicate URI rendered per binding translator of `rdf-store`
+  `rdf-store` is an RDF store
+  `query-fn` := fn [repo] -> bindings
+  `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
   "
   ([query-fn rdf-store s p]
    (query-for-o nil  query-fn rdf-store s p))
@@ -462,7 +468,7 @@ Where:
       (reduce collect-bindings #{}
               (query-fn rdf-store query))))))
 
-(def ask-s-p-o-template
+(def ^:private ask-s-p-o-template
   "ASK where
   {
     {{{graph-name-open}}}
@@ -475,10 +481,10 @@ Where:
 (defn ask-s-p-o 
   "Returns true if `s` `p` `o` is a triple at endpoint of `rdf-store`
 Where:
-  <s> <p> <o> are subject, predicate and object
-  <rdf-store> is an RDF store
-  <graph-uri> is a URI or KWI naming the graph (or nil if DEFAULT graph)
-  <ask-fn> := fn [repo] -> bindings
+  `s` `p` `o` are subject, predicate and object
+  `rdf-store` is an RDF store
+  `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  `ask-fn` := fn [repo] -> bindings
 "
   ([ask-fn rdf-store s p o]
    (ask-s-p-o nil ask-fn rdf-store s p o)

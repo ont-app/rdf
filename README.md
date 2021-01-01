@@ -18,9 +18,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 <a name="h2-dependencies"></a>
 ## Dependencies
 
-```
-[ont-app/rdf "0.1.0-SNAPSHOT"]
-```
+[![Clojars Project](https://img.shields.io/clojars/v/ont-app/rdf.svg)](https://clojars.org/ont-app/rdf)
 
 Require thus:
 ```

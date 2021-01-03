@@ -277,7 +277,7 @@ Where
                       "")
    })                  
 
-(def ^:private subjects-query-template
+(def subjects-query-template
   ;; note the use of 3 brackets to turn off escaping
   "
   Select Distinct ?s Where
@@ -308,7 +308,7 @@ Where
      (map :s
           (query-fn rdf-store query)))))
 
-(def ^:private normal-form-query-template
+(def normal-form-query-template
   "
   Select ?s ?p ?o
   Where
@@ -396,7 +396,7 @@ about blank nodes not being supported as first-class identifiers."
           ;; else it's some other message
           (throw e))))))
 
-(def ^:private query-for-p-o-template
+(def query-for-p-o-template
   "
   Select ?p ?o Where
   {
@@ -437,7 +437,7 @@ Where
              (query-fn rdf-store query))))))
 
 
-(def ^:private query-for-o-template
+(def query-for-o-template
   "
   Select ?o Where
   {
@@ -480,7 +480,7 @@ Where:
       (reduce collect-bindings #{}
               (query-fn rdf-store query))))))
 
-(def ^:private ask-s-p-o-template
+(def ask-s-p-o-template
   "ASK where
   {
     {{{graph-name-open}}}

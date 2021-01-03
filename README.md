@@ -14,6 +14,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
   - [`xsd` values](#h3-xsd-values)
   - [Transit-encoded-values](#h3-transit-encoded-values)
 - [Query templates supporting the IGraph member-access methods](#h2-query-templates)
+- [Debugging](#h2-debugging)
 
 <a name="h2-dependencies"></a>
 ## Dependencies
@@ -205,7 +206,7 @@ Wherever KWIs are involved, checks will be performed to flag warnings
 in cases where the metadata has not been properly specified for the
 implied namespace of the KWI.
 
-
+<a name="h2-debugging"></a>
 ## Debugging
 In addition to standard logging, functions in this module are logged with the [graph-log](https://github.com/ont-app/graph-log) logging library, which records various execution events at log levels `:glog/TRACE` and `:glog/DEBUG`.
 

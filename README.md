@@ -206,6 +206,26 @@ in cases where the metadata has not been properly specified for the
 implied namespace of the KWI.
 
 
+## Debugging
+In addition to standard logging, functions in this module are logged with the [graph-log](https://github.com/ont-app/graph-log) logging library, which records various execution events at log levels `:glog/TRACE` and `:glog/DEBUG`.
+
+This can be enabled thus:
+
+```
+(require [ont-app.graph-log.core :as glog])
+
+> (glog/set-level! :glog/LogGraph :glog/TRACE)
+> ;; DO STUFF
+> (glog/entries)
+[<entry 0>
+ .....
+ <entry n>
+ ]
+ > 
+```
+
+See the graph-log documentation for details.
+
 ## License
 
 Copyright © 2020 Eric D. Scott

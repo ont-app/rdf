@@ -57,6 +57,13 @@
              f))
       )))
 
+(deftest render-basic-literals-test
+  "Basic render-literal implementations for numbers and language-tagged strings"
+  (is (= (str (rdf-app/render-literal 1)) "1"))
+  (is (= (str (rdf-app/render-literal 1.0)) "1.0"))
+  (is (= (str (rdf-app/render-literal #lstr "dog@en")) "\"dog\"@en"))
+  )
+
 (def test-query-template "
   Select Distinct ?s Where
   {

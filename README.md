@@ -14,6 +14,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
   - [`xsd` values](#h3-xsd-values)
   - [Transit-encoded-values](#h3-transit-encoded-values)
 - [Query templates supporting the IGraph member-access methods](#h2-query-templates)
+- [Debugging](#h2-debugging)
 
 <a name="h2-dependencies"></a>
 ## Dependencies
@@ -74,8 +75,11 @@ literal, and returns a value expected to be fielded by some
 _render-literal_ method keyed to that value.
 
 By default, instances of the LangStr record (described below) will be
-dispatched on ::LangStr, otherwise the type of the literal will be the
-dispatch value.
+dispatched on ::LangStr, with a method defined to return say `"my word"@en`.
+otherwise the dispatch value will be the type of the literal.
+
+Integers and floats will be rendered directly by default. Values
+unhandled by a specific method will default to be rendered in quotes.
 
 There is a _translate-literal_ method defined for :rdf-app/TransitData,
 discussed in more detail below.
@@ -200,6 +204,26 @@ Wherever KWIs are involved, checks will be performed to flag warnings
 in cases where the metadata has not been properly specified for the
 implied namespace of the KWI.
 
+<a name="h2-debugging"></a>
+## Debugging
+In addition to standard logging, functions in this module are logged with the [graph-log](https://github.com/ont-app/graph-log) logging library, which records various execution events at log levels `:glog/TRACE` and `:glog/DEBUG`.
+
+This can be enabled thus:
+
+```
+(require [ont-app.graph-log.core :as glog])
+
+> (glog/set-level! :glog/LogGraph :glog/TRACE)
+> ;; DO STUFF
+> (glog/entries)
+[<entry 0>
+ .....
+ <entry n>
+ ]
+ > 
+```
+
+See the graph-log documentation for details.
 
 ## License
 

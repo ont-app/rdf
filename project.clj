@@ -1,27 +1,24 @@
-(defproject ont-app/rdf "0.1.2"
+(defproject ont-app/rdf "0.1.3-SNAPSHOT"
   :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [;; for deps :tree
-                 [com.google.code.findbugs/jsr305 "3.0.2"]
-                 [com.google.errorprone/error_prone_annotations "2.4.0"]
-                 ;; clojure
-                 [org.clojure/clojure "1.10.1"]
-                 [org.clojure/clojurescript "1.10.773"]
-                 [org.clojure/spec.alpha "0.2.187"]
+  :dependencies [;; clojure
+                 [org.clojure/clojure "1.10.3"]
+                 [org.clojure/clojurescript "1.10.891"]
+                 [org.clojure/spec.alpha "0.2.194"]
                  ;; 3rd party libs
-                 [cheshire "5.10.0"]
-                 [cljstache "2.0.5"]
+                 [cheshire "5.10.1"]
+                 [cljstache "2.0.6"]
                  [com.cognitect/transit-clj "1.0.324"]
-                 [com.cognitect/transit-cljs "0.8.264"]
-                 [com.taoensso/timbre "4.11.0-alpha1"]
+                 [com.cognitect/transit-cljs "0.8.269"]
+                 [com.taoensso/timbre "5.1.2"]
                  [lein-doo "0.1.11"]
                  ;; Ont-app libs
-                 [ont-app/graph-log "0.1.1"]
-                 [ont-app/igraph "0.1.5"]
+                 [ont-app/graph-log "0.1.4"]
+                 [ont-app/igraph "0.1.7"]
                  [ont-app/igraph-vocabulary "0.1.2"]
-                 [ont-app/vocabulary "0.1.2"]
+                 [ont-app/vocabulary "0.1.3"]
                  ]
   
   ;; :main ^:skip-aot ont-app.rdf.core
@@ -67,7 +64,7 @@
   :codox {:output-path "doc"}
 
   :profiles {:uberjar {:aot :all}
-             :dev {:dependencies [[binaryage/devtools "1.0.2"]
+             :dev {:dependencies [[binaryage/devtools "1.0.4"]
                                   ]
                    :source-paths ["src"] 
                    :clean-targets

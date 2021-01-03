@@ -30,7 +30,7 @@ Require thus:
 
 ### URI namespace mappings
 The namepace metadata of the core maps to `ont-app.rdf.ont`, whose
-preferred prefix is `rdf-app` (since `rdf` is already spoken for).
+preferred prefix is `rdf-app` (since `rdf` is already spoken for with _ont-app.vocabulary.rdf_).
 
 The preferred namespace URI is declared as
 `"http://rdf.naturallexicon.org/rdf/ont#"`.
@@ -39,15 +39,15 @@ The preferred namespace URI is declared as
 ## Motivation
 There are numerous RDF-based platforms, each with its own
 idosyncracies, but there is also a significant overlap between the
-underlying logical structure of each such platform. This library aims
+underlying logical structure of each RDF platform. This library aims
 to capture that overlap, parameterized appropriately for
 implementation-specific variations.
 
 This includes:
 - A multimethod `render-literal`, aimed at translating between clojure
   data and data to be stored in an RDF store.
-- Support for language-tagged strings and a declaration of an `#lstr`
-  reader macro.
+- Support for language-tagged strings with `#lstr` reader macro
+  defined in the [vocabulary](https://github.com/ont-app/vocabulary) module.
 - Support for a `^^transit:json` datatype tag, allowing for arbitrary
   clojure content to be serialized/deserialized as strings in
   an RDF store.
@@ -66,23 +66,26 @@ strings, xsd types for the usual scalar values, and possibly custom
 URI-tagged data. Sometimes the specific platform will already define
 its own intermediate datastructures for such literals. 
 
-The `render-literal` multimethod exists to handle the task of
-translating between these contexts.
+The `render-literal`
+[multimethod](https://clojure.org/reference/multimethods) exists to
+handle the task of translating between these contexts.
 
 `render-literal` is dispatched by the function
 `render-literal-dispatch`, which takes as an argument a single
 literal, and returns a value expected to be fielded by some
 _render-literal_ method keyed to that value.
 
-By default, instances of the LangStr record (described below) will be
-dispatched on ::LangStr, with a method defined to return say `"my word"@en`.
-otherwise the dispatch value will be the type of the literal.
+By default, instances of the LangStr record (described
+[below](#h3-language-tagged-strings)) will be dispatched on `::LangStr`,
+with a method defined to return say `"my word"@en`.  otherwise the
+dispatch value will be the type of the literal.
 
 Integers and floats will be rendered directly by default. Values
 unhandled by a specific method will default to be rendered in quotes.
 
-There is a _translate-literal_ method defined for :rdf-app/TransitData,
-discussed in more detail below.
+There is a _translate-literal_ method defined for `:rdf-app/TransitData`,
+discussed in more detail [below](#h3-transit-encoded-values).
+
 
 <a name="h4-special-literal-dispatch"></a>
 #### `@special-literal-dispatch` 
@@ -92,6 +95,9 @@ of literals, for example grafter has its own way of handling xsd values.
 
 There is an atom defined called `special-literal-dispatch` (defult nil) which if non-nil should be a function `f [x] -> <dispatch-value>`. Any non-nil dispatch value returned by this function will override the default behavior of _render-literal-dispatch_, and provide a dispatch value to which you may target the appropriate methods.
 
+The [igraph-grafter](https://github.com/ont-app/igraph-grafter) source
+has examples of this.
+
 <a name="h3-language-tagged-strings"></a>
 ### Language-tagged strings
 
@@ -100,7 +106,7 @@ reader macro.
 
 Such values will be dispatched to _render-literal_ as _:rdf/LangStr_,
 but the _render-literal_ method for LangStr is expected to be
-platform-sepcific.
+platform-specific.
 
 <a name="h3-xsd-values"></a>
 ### `xsd` values
@@ -120,23 +126,37 @@ should serve as instructive examples.
 ### Transit-encoded values
 
 Of course some values such as the standard Clojure containers, and
-user-defined records and datatypes will not be handled by the xsd
+user-defined records and datatypes are not handled by the xsd
 standard.
 
 This library supports storing such literals in serialized form using a
 `^^transit.json` datatype URI tag. 
 
+```
+> (rdf-app/render-literal [1 2 3])
+"\"[1, 2, 3]\"^^transit:json"
+
+> (rdf-app/read-transit-json "[1,2,3]")
+[1 2 3]
+
+> (def round-trip [x]
+    (-> (re-matches rdf-app/transit-re (rdf-app/render-literal x))
+        (nth 1))
+        (rdf-app/read-transit-json))
+        
+> (round-trip `(fn [x] "yowsa"))
+(fn [x] "yowsa")
+
+```
 The _render-literal_ method keyed to `:rdf/TransitData` is the handler
 encoding data as transit. To use it, take the following steps:
 
-- As needed, add a _read handler_
-  `transit-read-handlers_ (described below). 
-  - Note that standard Clojure containers and LangStr already have
-    such handlers
-- As needed, add a _write handler_ to `transite-write-handlers`
-  - Again, the standard clojure containers and LangStr records are
-    already covered.
-- Use _derive_ to make the data type to be rendered a descendent of
+- As needed, add a translit [_read handler_](https://cognitect.github.io/transit-clj/#cognitect.transit/read-handler) to `transit-read-handlers`. 
+  - Note in core.cljc that LangStr already has such such a handler
+- As needed, add a transit [_write handler_](https://cognitect.github.io/transit-clj/#cognitect.transit/write-handler) to `transit-write-handlers`
+  - Again, the LangStr record is already covered, and should serve as a good example.
+- Use [_derive_](https://clojuredocs.org/clojure.core/derive) to make
+  the data type to be rendered a descendent of
   `:rdf/TransitData`. This will make the eligible for handling by that
   _render-literal_ method.
   - e.g. `(derive clojure.lang.PersistentVector :rdf/TransitData)`
@@ -144,9 +164,9 @@ encoding data as transit. To use it, take the following steps:
 - Transit rendering for any such type can disabled using _underive_.
 
 
-The datatype URI whose qname is _transit.json_ expands to
+The datatype URI whose qname is _transit:json_ expands to
 `<http://rdf.natural-lexicon.org/ns/cognitect.transit#json>`, based on
-the follwing delcaration in _ont-app.rdf.ont_:
+the following delcaration in _ont-app.rdf.ont_:
 
 ```
 (voc/put-ns-meta!
@@ -174,12 +194,15 @@ For example, here is a template that should serve to acquire normal form of a gi
   Select ?s ?p ?o
   Where
   {
-    {{graph-name-open|safe}}
-    ?s ?p ?o
-    {{graph-name-close}}
+    {{{graph-name-open}}}
+    ?_s ?_p ?_o
+    # rebinding supports things like platform-specific round-tripping
+    Bind ({{{rebind-_s}}} as ?s)
+    Bind ({{{rebind-_p}}} as ?p)
+    Bind ({{{rebind-_o}}} as ?o)
+    {{{graph-name-close}}}
   }
   ")
-
 ```
 
 This template can be referenced by a function `query-for-normal-form`
@@ -203,6 +226,22 @@ Analogous template/function ensembles are defined for:
 Wherever KWIs are involved, checks will be performed to flag warnings
 in cases where the metadata has not been properly specified for the
 implied namespace of the KWI.
+
+<a name="h3-round-tripping"></a>
+
+Note that the query template above has clauses like:
+
+```
+    ...
+    Bind ({{{rebind-_s}}} as ?s)
+    ...
+```
+
+The purpose of this is to allow for rebinding of blank nodes to a
+platform-specific scheme that supports
+'[round-tripping](https://aidanhogan.com/docs/bnodes.pdf)' of blank
+nodes in subsequent queries to the same endpoint. The [igraph-jena](https://github.com/ont-app/igraph-jena) project provides a working example of this.
+
 
 <a name="h2-debugging"></a>
 ## Debugging

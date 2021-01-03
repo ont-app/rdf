@@ -5,14 +5,20 @@
    [clojure.string :as str]
    [cljstache.core :as stache]
    [ont-app.vocabulary.lstr :as lstr]
+   [ont-app.graph-log.core :as glog]
    [ont-app.rdf.core :as rdf-app]
+   #?(:clj [ont-app.graph-log.levels :as levels
+            :refer [warn debug trace value-trace value-debug]]
+      :cljs [ont-app.graph-log.levels :as levels
+            :refer-macros [warn debug trace value-trace value-debug]])
    ))
-
 
 
 (deftest language-tagged-strings
   (testing "langstr dispatch"
-    (let [x #lstr "asdf@en"]
+    (let [x #?(:clj #lstr "asdf@en"
+               :cljs (read-string "#lstr \"asdf@en\""))
+          ]
       (is (= (str x) "asdf"))
       (is (= (lstr/lang x) "en"))
       (is (= (rdf-app/render-literal-dispatch x)
@@ -61,14 +67,18 @@
   "Basic render-literal implementations for numbers and language-tagged strings"
   (is (= (str (rdf-app/render-literal 1)) "1"))
   (is (= (str (rdf-app/render-literal 1.0)) "1.0"))
-  (is (= (str (rdf-app/render-literal #lstr "dog@en")) "\"dog\"@en"))
-  )
+  (is (= (str (rdf-app/render-literal #?(:clj #lstr "dog@en"
+                                         :cljs (read-string "#lstr \"dog@en\"")
+                                         ))
+              "\"dog\"@en"))))
 
 (def test-query-template "
   Select Distinct ?s Where
   {
     {{{graph-name-open}}} 
-    ?s ?p ?o.
+    ?_s ?_p ?_o.
+    # rebinding supports things like platform-specific round-tripping
+    Bind ({{{rebind-_s}}} as ?s)
     {{{graph-name-close}}}
   }
   ")
@@ -76,14 +86,9 @@
 (deftest selmer-to-cljstache
   (testing "Using cljstache (instead of selmer) should work on clj(s)."
     (is (= (stache/render test-query-template
-                          {:graph-name-open "GRAPH <http://example.com> {"
-                           :graph-name-close "}"
-                           })
-           "\n  Select Distinct ?s Where\n  {\n    GRAPH <http://example.com> { \n    ?s ?p ?o.\n    }\n  }\n  "))
-    (is (= (stache/render
-            test-query-template
-            {:graph-name-open ""
-             :graph-name-close ""
-             })
-           "\n  Select Distinct ?s Where\n  {\n     \n    ?s ?p ?o.\n    \n  }\n  "))))
-
+                          (merge @rdf-app/query-template-defaults
+                                 {:rebind-_s "IF(isBlank(?_s), IRI(?_s), ?_s)"
+                                  }
+                                 ))
+           "\n  Select Distinct ?s Where\n  {\n    GRAPH DEFAULT { \n    ?_s ?_p ?_o.\n    # rebinding supports things like platform-specific round-tripping\n    Bind (IF(isBlank(?_s), IRI(?_s), ?_s) as ?s)\n    }\n  }\n  "))))
+ 

@@ -13,7 +13,6 @@ It includes:
    ;; [clojure.java.io :as io]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
-   ;; [selmer.parser :as selmer]
    [cljstache.core :as stache]
    ;; [taoensso.timbre :as timbre]
    [cognitect.transit :as transit]
@@ -44,7 +43,7 @@ It includes:
 
 ;; aliases 
 (def prefixed
-  "Returns `query`, with prefixe declarations prepended
+  "Returns `query`, with prefix declarations prepended
   Where
   - `query` is a SPARQL query"
   voc/prepend-prefix-declarations)
@@ -133,6 +132,8 @@ It includes:
      (transit/write
       (transit/writer :json {:handlers @transit-write-handlers})
       value)))
+
+;; NO READER MACROS BELOW THIS POINT
 
 ;; SPECS
 (def transit-re
@@ -224,7 +225,7 @@ Where
   [literal]
   (value-trace
    ::RenderLiteralDispatch
-   [:log/literal literal]
+   [:literal literal]
    (if-let [special-dispatch (@special-literal-dispatch literal)]
      special-dispatch
      ;; else no special dispatch...
@@ -244,8 +245,12 @@ Where
   [ls]
   (str (quote-str (.s ls)) "@" (.lang ls)))
 
-(derive java.lang.Long ::number)
-(derive java.lang.Double ::number)
+#?(:clj (derive java.lang.Long ::number)
+   :cljs (derive cljs.core.Long ::number)
+   )
+#?(:clj (derive java.lang.Double ::number)
+   :cljs (derive cljs.core..Double ::number)
+   )
 
 (defmethod render-literal ::number
   ;; just insert the value directly
@@ -261,6 +266,24 @@ Where
 ;; STANDARD TEMPLATES FOR IGRAPH MEMBER ACCESS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(def query-template-defaults
+  "Default key/value pairs appicable to query templates for your platform.
+  Where
+  - `:graph-name-open` opens the named graph expession
+  - `:graph-name-close` closes `:graph-name-open`
+  - `:rebind-_s` asserts new binding for ?_s in ?_s ?_p ?_o 
+  - `:rebind-_p` asserts a new binding the value retrieved for ?_p in ?_s ?_p ?_o 
+  - `:rebind-_o` aserts a new binding the value retrieved for ?_o in ?_s ?_p ?_o
+  - NOTE: For example we may assert :rebind-_s as `IRI(?_S)` in jena to set up bnode round-tripping for ?_s.
+  "
+  (atom
+   {:graph-name-open "GRAPH DEFAULT {"
+    :rebind-_s "?_s"
+    :rebind-_p "?_p"
+    :rebind-_o "?_o"
+    :graph-name-close "}"
+    }))
+
 (defn- query-template-map 
   "Returns {`k` `v`, ...} appropriate for `rdf-store`
 Where
@@ -269,13 +292,14 @@ Where
   - `rdf-store` is an RDF store.
 "
   [graph-uri rdf-store]
-  {:graph-name-open (if graph-uri
-                      (str "GRAPH <" (voc/iri-for graph-uri) "> {")
-                      "")
-   :graph-name-close (if graph-uri 
-                      (str "}")
-                      "")
-   })                  
+  (merge @query-template-defaults
+         {:graph-name-open (if graph-uri
+                             (str "GRAPH <" (voc/iri-for graph-uri) "> {")
+                             "")
+          :graph-name-close (if graph-uri 
+                              (str "}")
+                              "")
+          }))
 
 (def subjects-query-template
   ;; note the use of 3 brackets to turn off escaping
@@ -283,7 +307,11 @@ Where
   Select Distinct ?s Where
   {
     {{{graph-name-open}}} 
-    ?s ?p ?o.
+    ?_s ?_p ?_o.
+    # rebinding supports things like platform-specific round-tripping
+    Bind ({{{rebind-_s}}} as ?s)
+    Bind ({{{rebind-_p}}} as ?p)
+    Bind ({{{rebind-_o}}} as ?o)
     {{{graph-name-close}}}
   }
   ")
@@ -314,7 +342,11 @@ Where
   Where
   {
     {{{graph-name-open}}}
-    ?s ?p ?o
+    ?_s ?_p ?_o
+    # rebinding supports things like platform-specific round-tripping
+    Bind ({{{rebind-_s}}} as ?s)
+    Bind ({{{rebind-_p}}} as ?p)
+    Bind ({{{rebind-_o}}} as ?o)
     {{{graph-name-close}}}
   }
   ")
@@ -343,8 +375,8 @@ Where
            (collect-binding [spo binding]
              (value-trace
               ::CollectNormalFormBinding
-              [:log/spo spo
-               :log/binding binding]
+              [:spo spo
+               :binding binding]
               (assoc spo (:s binding)
                      (add-po (get spo (:s binding) {})
                              binding))))
@@ -355,9 +387,9 @@ Where
           ]
       (value-trace
        ::QueryForNormalForm
-       [:log/query query
-        :log/graph-uri graph-uri
-        :log/query-fn query-fn]
+       [:query query
+        :graph-uri graph-uri
+        :query-fn query-fn]
        (reduce collect-binding
                {}
                (query-fn rdf-store query)))))))
@@ -370,8 +402,8 @@ Where
     (if-let [the-ns (find-ns n)]
       (when (not (meta the-ns))
         (warn ::NoMetaDataInNS
-              :glog/message "The namespace for {{log/kwi}} is in a namespace with no associated metadata."
-              :log/kwi kwi))))
+              :glog/message "The namespace for {{kwi}} is in a namespace with no associated metadata."
+              :kwi kwi))))
   kwi)
 
 
@@ -384,24 +416,21 @@ about blank nodes not being supported as first-class identifiers."
     ;;else not a blank node
     (try
       (voc/qname-for (check-ns-metadata uri-spec))
-      (catch java.lang.AssertionError e
-        (if (= (str e)
-               "java.lang.AssertionError: Assert failed: (keyword? kw)")
-          (throw (ex-info (str "The URI spec " uri-spec " is not a keyword.\nCould it be a blank node?\nIf so, blank nodes cannot be treated as first-class identifiers in SPARQL. Use a dedicated query that traverses the blank node instead.")
+      (catch Throwable e
+        (throw (ex-info (str "The URI spec " uri-spec " is invalid.\nCould it be a blank node?")
                           (merge (ex-data e)
-                                 {:type ::Non-Keyword-URI-spec
+                                 {:type ::Invalid-URI-spec
                                   ::uri-spec uri-spec
-                                  })))
-                             
-          ;; else it's some other message
-          (throw e))))))
-
+                                  })))))))
 (def query-for-p-o-template
   "
   Select ?p ?o Where
   {
     {{{graph-name-open}}}
-    {{{subject}}} ?p ?o.
+    {{{subject}}} ?_p ?_o.
+    # rebinding supports things like platform-specific round-tripping
+    Bind ({{{rebind-_p}}} as ?p)
+    Bind ({{{rebind-_o}}} as ?o)
     {{{graph-name-close}}}
   }
   ")
@@ -442,7 +471,9 @@ Where
   Select ?o Where
   {
     {{{graph-name-open}}}
-    {{{subject}}} {{{predicate}}} ?o.
+    {{{subject}}} {{{predicate}}} ?_o.
+    # rebinding supports things like platform-specific round-tripping  
+    Bind ({{{rebind-_o}}} as ?o)
     {{{graph-name-close}}}
   }
   ")
@@ -512,14 +543,14 @@ Where:
                                   (voc/qname-for o)
                                   (render-literal o))})))
         starting (debug ::Starting_ask-s-p-o
-                        :log/query query
-                        :log/subject s
-                        :log/predicate p
-                        :log/object o)
+                        :query query
+                        :subject s
+                        :predicate p
+                        :object o)
         ]
     (value-debug
      ::ask-s-p-o-return
-     [:log/resultOf starting]
+     [:resultOf starting]
      (ask-fn rdf-store query)))))
 
 

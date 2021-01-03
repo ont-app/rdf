@@ -1,2 +1,3 @@
+- v 0.1.3 : adding parameters to query templates for re-binding bnodes for round-tripping on implementations that can support that
 - V 0.1.2 : adding render-literal support for lstr and numbers
 - V 0.1.1 : upgrading vocabulary and igraph-vocabulary to 0.1.2

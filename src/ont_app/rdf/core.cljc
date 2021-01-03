@@ -240,6 +240,18 @@ Where
   [v]
   (render-literal-as-transit-json v))
 
+(defmethod render-literal :rdf-app/LangStr
+  [ls]
+  (str (quote-str (.s ls)) "@" (.lang ls)))
+
+(derive java.lang.Long ::number)
+(derive java.lang.Double ::number)
+
+(defmethod render-literal ::number
+  ;; just insert the value directly
+  [n]
+  n)
+
 (defmethod render-literal :default
   [s]
   (quote-str s))
@@ -490,7 +502,6 @@ Where:
    (ask-s-p-o nil ask-fn rdf-store s p o)
    )
   ([graph-uri ask-fn rdf-store s p o]
-  
   (let [query (prefixed
                (stache/render
                 ask-s-p-o-template

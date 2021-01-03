@@ -76,8 +76,11 @@ literal, and returns a value expected to be fielded by some
 _render-literal_ method keyed to that value.
 
 By default, instances of the LangStr record (described below) will be
-dispatched on ::LangStr, otherwise the type of the literal will be the
-dispatch value.
+dispatched on ::LangStr, with a method defined to return say `"my word"@en`.
+otherwise the dispatch value will be the type of the literal.
+
+Integers and floats will be rendered directly by default. Values
+unhandled by a specific method will default to be rendered in quotes.
 
 There is a _translate-literal_ method defined for :rdf-app/TransitData,
 discussed in more detail below.

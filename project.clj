@@ -1,24 +1,24 @@
-(defproject ont-app/rdf "0.1.3-SNAPSHOT"
+(defproject ont-app/rdf "0.1.4-SNAPSHOT"
   :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [;; clojure
                  [org.clojure/clojure "1.10.3"]
-                 [org.clojure/clojurescript "1.10.891"]
-                 [org.clojure/spec.alpha "0.2.194"]
+                 
+                 [org.clojure/spec.alpha "0.3.218"]
                  ;; 3rd party libs
                  [cheshire "5.10.1"]
                  [cljstache "2.0.6"]
                  [com.cognitect/transit-clj "1.0.324"]
                  [com.cognitect/transit-cljs "0.8.269"]
                  [com.taoensso/timbre "5.1.2"]
-                 [lein-doo "0.1.11"]
+                 
                  ;; Ont-app libs
-                 [ont-app/graph-log "0.1.4"]
-                 [ont-app/igraph "0.1.7"]
-                 [ont-app/igraph-vocabulary "0.1.2"]
-                 [ont-app/vocabulary "0.1.3"]
+                 [ont-app/graph-log "0.1.5-SNAPSHOT"]
+                 ;;[ont-app/igraph "0.1.7"]
+                 ;;[ont-app/igraph-vocabulary "0.1.2"]
+                 [ont-app/vocabulary "0.1.5-SNAPSHOT"]
                  ]
   
   ;; :main ^:skip-aot ont-app.rdf.core
@@ -26,14 +26,14 @@
   :resource-paths ["resources" "target/cljsbuild"]
   
   :plugins [[lein-codox "0.10.6"]
-            [lein-cljsbuild "1.1.7"
+            #_[lein-cljsbuild "1.1.7"
              :exclusions [[org.clojure/clojure]]]
-            [lein-doo "0.1.11"]
+            #_[lein-doo "0.1.11"]
             ]
   :source-paths ["src"]
   :test-paths ["src" "test"]
-  :cljsbuild
-  {
+  ;;:cljsbuild
+  #_{
    :test-commands {"test" ["lein" "doo" "node" "test" "once"]}
    :builds
    {
@@ -65,6 +65,8 @@
 
   :profiles {:uberjar {:aot :all}
              :dev {:dependencies [[binaryage/devtools "1.0.4"]
+                                  ;;[lein-doo "0.1.11"]
+                                  ;;[org.clojure/clojurescript "1.10.896"]
                                   ]
                    :source-paths ["src"] 
                    :clean-targets

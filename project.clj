@@ -1,4 +1,4 @@
-(defproject ont-app/rdf "0.1.4-SNAPSHOT"
+(defproject ont-app/rdf "0.1.4"
   :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
@@ -13,18 +13,14 @@
                  [com.cognitect/transit-clj "1.0.324"]
                  [com.cognitect/transit-cljs "0.8.269"]
                  [com.taoensso/timbre "5.1.2"]
-                 
                  ;; Ont-app libs
-                 [ont-app/graph-log "0.1.5-SNAPSHOT"]
-                 ;;[ont-app/igraph "0.1.7"]
-                 ;;[ont-app/igraph-vocabulary "0.1.2"]
-                 [ont-app/vocabulary "0.1.5-SNAPSHOT"]
+                 [ont-app/graph-log "0.1.5"]
                  ]
   
   ;; :main ^:skip-aot ont-app.rdf.core
   :target-path "target/%s"
   :resource-paths ["resources" "target/cljsbuild"]
-  
+  ;; NOTE CLJS STUFF DISABLED FOR NOW
   :plugins [[lein-codox "0.10.6"]
             #_[lein-cljsbuild "1.1.7"
              :exclusions [[org.clojure/clojure]]]

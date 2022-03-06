@@ -269,50 +269,59 @@ Where
 (def query-template-defaults
   "Default key/value pairs appicable to query templates for your platform.
   Where
-  - `:graph-name-open` opens the named graph expession
-  - `:graph-name-close` closes `:graph-name-open`
+  - `:from-clauses` one FROM clause for each graph informing the query
   - `:rebind-_s` asserts new binding for ?_s in ?_s ?_p ?_o 
   - `:rebind-_p` asserts a new binding the value retrieved for ?_p in ?_s ?_p ?_o 
   - `:rebind-_o` aserts a new binding the value retrieved for ?_o in ?_s ?_p ?_o
   - NOTE: For example we may assert :rebind-_s as `IRI(?_S)` in jena to set up bnode round-tripping for ?_s.
   "
   (atom
-   {:graph-name-open "GRAPH DEFAULT {"
+   {:from-clauses ""
     :rebind-_s "?_s"
     :rebind-_p "?_p"
     :rebind-_o "?_o"
-    :graph-name-close "}"
     }))
 
+(defn from-clause-for
+  "
+  Returns FROM `graph-uri`'
+  Note: typically informs `query-template-map` 
+  "
+  [graph-uri]
+  (stache/render "FROM <{{{graph-uri}}}>"
+                 {:graph-uri graph-uri}))
+
 (defn- query-template-map 
-  "Returns {`k` `v`, ...} appropriate for `rdf-store`
-Where
+  "Returns {`k` `v`, ...} appropriate for `rdf-store` with `graph-uri`
+  Where
   - `k` and `v` are cljstache template parameters which may appear in some query, 
   e.g. named graph open/close clauses
   - `rdf-store` is an RDF store.
-"
+  - `graph-uri` is either nil, a single graph-uri or a set of graph-uris
+  "
   [graph-uri rdf-store]
-  (merge @query-template-defaults
-         {:graph-name-open (if graph-uri
-                             (str "GRAPH <" (voc/iri-for graph-uri) "> {")
-                             "")
-          :graph-name-close (if graph-uri 
-                              (str "}")
-                              "")
-          }))
+  (let [as-set (fn [gu] (if (set? gu) gu (set gu)))
+        ]
+    (merge @query-template-defaults
+           {:from-clauses (if graph-uri
+                            (s/join "\n"
+                                    (map (comp from-clause-for voc/iri-for)
+                                         (as-set graph-uri)))
+                            ;; else no graph uri
+                            "")
+            })))
 
 (def subjects-query-template
   ;; note the use of 3 brackets to turn off escaping
   "
-  Select Distinct ?s Where
+  Select Distinct ?s
+  {{{from-clauses}}} 
+  Where
   {
-    {{{graph-name-open}}} 
     ?_s ?_p ?_o.
-    # rebinding supports things like platform-specific round-tripping
     Bind ({{{rebind-_s}}} as ?s)
     Bind ({{{rebind-_p}}} as ?p)
     Bind ({{{rebind-_o}}} as ?o)
-    {{{graph-name-close}}}
   }
   ")
 
@@ -339,15 +348,13 @@ Where
 (def normal-form-query-template
   "
   Select ?s ?p ?o
+  {{{from-clauses}}}
   Where
   {
-    {{{graph-name-open}}}
-    ?_s ?_p ?_o
-    # rebinding supports things like platform-specific round-tripping
+    ?_s ?_p ?_o.
     Bind ({{{rebind-_s}}} as ?s)
     Bind ({{{rebind-_p}}} as ?p)
     Bind ({{{rebind-_o}}} as ?o)
-    {{{graph-name-close}}}
   }
   ")
 
@@ -424,14 +431,13 @@ about blank nodes not being supported as first-class identifiers."
                                   })))))))
 (def query-for-p-o-template
   "
-  Select ?p ?o Where
+  Select ?p ?o
+  {{{from-clauses}}}
+  Where
   {
-    {{{graph-name-open}}}
     {{{subject}}} ?_p ?_o.
-    # rebinding supports things like platform-specific round-tripping
     Bind ({{{rebind-_p}}} as ?p)
     Bind ({{{rebind-_o}}} as ?o)
-    {{{graph-name-close}}}
   }
   ")
 
@@ -468,13 +474,12 @@ Where
 
 (def query-for-o-template
   "
-  Select ?o Where
+  Select ?o
+  {{{from-clauses}}}
+  Where
   {
-    {{{graph-name-open}}}
     {{{subject}}} {{{predicate}}} ?_o.
-    # rebinding supports things like platform-specific round-tripping  
     Bind ({{{rebind-_o}}} as ?o)
-    {{{graph-name-close}}}
   }
   ")
 
@@ -512,11 +517,11 @@ Where:
               (query-fn rdf-store query))))))
 
 (def ask-s-p-o-template
-  "ASK where
+  "ASK
+  {{{from-clauses}}}
+  where
   {
-    {{{graph-name-open}}}
     {{{subject}}} {{{predicate}}} {{{object}}}.
-    {{graph-name-close}}
   }"
   )
 

@@ -7,6 +7,7 @@
    [ont-app.vocabulary.lstr :as lstr]
    [ont-app.graph-log.core :as glog]
    [ont-app.rdf.core :as rdf-app]
+   [ont-app.vocabulary.core :as voc]
    #?(:clj [ont-app.graph-log.levels :as levels
             :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
@@ -74,13 +75,12 @@
               "\"dog\"@en"))))
 
 (def test-query-template "
-  Select Distinct ?s Where
+  Select Distinct ?s
+  {{{from-clauses}}} 
+  Where
   {
-    {{{graph-name-open}}} 
     ?_s ?_p ?_o.
-    # rebinding supports things like platform-specific round-tripping
     Bind ({{{rebind-_s}}} as ?s)
-    {{{graph-name-close}}}
   }
   ")
 
@@ -91,5 +91,18 @@
                                  {:rebind-_s "IF(isBlank(?_s), IRI(?_s), ?_s)"
                                   }
                                  ))
-           "\n  Select Distinct ?s Where\n  {\n    GRAPH DEFAULT { \n    ?_s ?_p ?_o.\n    # rebinding supports things like platform-specific round-tripping\n    Bind (IF(isBlank(?_s), IRI(?_s), ?_s) as ?s)\n    }\n  }\n  "))))
+           "\n  Select Distinct ?s\n   \n  Where\n  {\n    ?_s ?_p ?_o.\n    Bind (IF(isBlank(?_s), IRI(?_s), ?_s) as ?s)\n  }\n  "
+           ))))
+
+(deftest issue-5-from-clauses
+  (is (= "\n  Select ?s ?p ?o\n  FROM <http://www.w3.org/1999/02/22-rdf-syntax-ns#just-kidding>\nFROM <http://www.w3.org/1999/02/22-rdf-syntax-ns#also-just-kidding>\n  Where\n  {\n    ?_s ?_p ?_o.\n    Bind (?_s as ?s)\n    Bind (?_p as ?p)\n    Bind (?_o as ?o)\n  }\n  "
+         (stache/render rdf-app/normal-form-query-template
+                        (merge @rdf-app/query-template-defaults
+                               {:from-clauses
+                                (str/join "\n"
+                                          (map (comp rdf-app/from-clause-for voc/iri-for)
+                                               #{:rdf/just-kidding
+                                                 :rdf/also-just-kidding
+                                                 }))})))))
+
  

@@ -1,20 +1,12 @@
-(defproject ont-app/rdf "0.1.4"
+(defproject ont-app/rdf "0.1.5-SNAPSHOT"
   :description "Backstop for shared logic among RDF-based IGraph implementations"
   :url "https://github.com/ont-app/rdf"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [;; clojure
                  [org.clojure/clojure "1.10.3"]
-                 
                  [org.clojure/spec.alpha "0.3.218"]
-                 ;; 3rd party libs
-                 [cheshire "5.10.1"]
-                 [cljstache "2.0.6"]
-                 [com.cognitect/transit-clj "1.0.324"]
-                 [com.cognitect/transit-cljs "0.8.269"]
-                 [com.taoensso/timbre "5.1.2"]
-                 ;; Ont-app libs
-                 [ont-app/graph-log "0.1.5"]
+                 [ont-app/graph-log "0.1.6"]
                  ]
   
   ;; :main ^:skip-aot ont-app.rdf.core
@@ -60,7 +52,7 @@
   :codox {:output-path "doc"}
 
   :profiles {:uberjar {:aot :all}
-             :dev {:dependencies [[binaryage/devtools "1.0.4"]
+             :dev {:dependencies [[binaryage/devtools "1.0.5"]
                                   ;;[lein-doo "0.1.11"]
                                   ;;[org.clojure/clojurescript "1.10.896"]
                                   ]

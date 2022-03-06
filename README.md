@@ -192,15 +192,13 @@ For example, here is a template that should serve to acquire normal form of a gi
 (def normal-form-query-template
   "
   Select ?s ?p ?o
+  {{{from-clauses}}}
   Where
   {
-    {{{graph-name-open}}}
     ?_s ?_p ?_o
-    # rebinding supports things like platform-specific round-tripping
     Bind ({{{rebind-_s}}} as ?s)
     Bind ({{{rebind-_p}}} as ?p)
     Bind ({{{rebind-_o}}} as ?o)
-    {{{graph-name-close}}}
   }
   ")
 ```
@@ -213,7 +211,7 @@ This template can be referenced by a function `query-for-normal-form`
 ```
 Where:
 
-- `<graph-kwi>` is a KWI for the named graph URI (defaults to _nil_, indicating the DEFAULT graph)
+- `<graph-kwi>` is a KWI for the named graph URI. May also be a set of named graph URIs. (defaults to _nil_, indicating the DEFAULT graph). 
 - `<query-fn>` is a platform-specific function to pose the rendered query template to _rdf-store_.
 - `<rdf-store>` is a platform-specific point of access to the RDF store, e.g. a database connection or SPARQL endpoint.
 

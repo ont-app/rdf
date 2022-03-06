@@ -326,13 +326,14 @@ Where
   ")
 
 (defn query-for-subjects 
-  "Returns [`subject` ...] at endpoint of `rdf-store`
+  "Returns [`subject` ...] at endpoint of `rdf-store` for `graph-uri`
 Where
   - `subject` is the uri of a subject from `rdf-store`, 
   rendered per the binding translator of `rdf-store`
   - `rdf-store` conforms to ::sparql-client spec
   - `query-fn` := fn [repo] -> bindings
-  - `graph-uri` is a URI  or KWI naming the graph  (or nil if DEFAULT graph)
+  - `graph-uri` is a URI  or KWI naming the graph, or a set of them  (or nil if DEFAULT
+    graph)
 "
   ([query-fn rdf-store]
    (query-for-subjects (fn [_] nil) query-fn rdf-store)
@@ -362,7 +363,8 @@ Where
   "Returns IGraph normal form for `graph` named by `graph-uri` in `rdf-store`
   Where
   - `graph` is a named graph in `rdf-store`
-  - `graph-uri` is a URI or KWI naming the graph (default nil -> DEFAULT graph)
+  - `graph-uri` is a URI or KWI naming the graph, or a set of them
+     (default nil -> DEFAULT graph)
   - `rdf-store` is an RDF store 
   - `query-fn` := fn [rdf-store sparql-query] -> #{`bmap`, ...}
   - `bmap` := {:?s :?p :?o}
@@ -449,7 +451,8 @@ Where
   - `s` is a subject uri keyword. ~ voc/voc-re
   - `rdf-store` is and RDF store.
   - `query-fn` := fn [repo] -> bindings
-  - `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  - `graph-uri` is a URI or KWI naming the graph, or a set of them
+    (or nil if DEFAULT graph)
 "
   ([query-fn rdf-store s]
    (query-for-p-o nil  query-fn rdf-store s)
@@ -491,7 +494,8 @@ Where:
   - `p` is a predicate URI rendered per binding translator of `rdf-store`
   - `rdf-store` is an RDF store
   - `query-fn` := fn [repo] -> bindings
-  - `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  - `graph-uri` is a URI or KWI naming the graph, or a set of them
+     (or nil if DEFAULT graph)
   "
   ([query-fn rdf-store s p]
    (query-for-o nil  query-fn rdf-store s p))
@@ -531,7 +535,8 @@ Where:
 Where:
   - `s` `p` `o` are subject, predicate and object
   - `rdf-store` is an RDF store
-  - `graph-uri` is a URI or KWI naming the graph (or nil if DEFAULT graph)
+  - `graph-uri` is a URI or KWI naming the graph, or a set of them
+     (or nil if DEFAULT graph)
   - `ask-fn` := fn [repo] -> bindings
 "
   ([ask-fn rdf-store s p o]

@@ -1,6 +1,5 @@
-*~
 *#
 .*
 target/
-resources/
-pom.xml
+resources/public/js
+

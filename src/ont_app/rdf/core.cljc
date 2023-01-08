@@ -2,36 +2,34 @@
   {:doc "This is a backstop for shared logic between various RDF-based
   implementations of IGraph. 
 It includes:
-- support for LangStr using the #lstr custom reader
+- support for LangStr using the #voc/lstr custom reader
 - support for ^^transit:json datatype tags
 - templating utilities for the standard IGraph member access methods.
  "
    :author "Eric D. Scott"
+   ;; These errors were found to be spurious, related to cljs ...
+   :clj-kondo/config '{:linters {:unresolved-symbol {:level :off}
+                                 }}
    }
   (:require
    [clojure.string :as s]
-   ;; [clojure.java.io :as io]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
    [cljstache.core :as stache]
-   ;; [taoensso.timbre :as timbre]
    [cognitect.transit :as transit]
    ;; ont-app
-   [ont-app.graph-log.core :as glog]
    #?(:clj [ont-app.graph-log.levels :as levels
-            :refer [warn debug trace value-trace value-debug]]
+            :refer [warn debug value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
-            :refer-macros [warn debug trace value-trace value-debug]])
-   [ont-app.igraph.core :as igraph]
-   [ont-app.igraph.graph :as graph]
+            :refer-macros [warn debug value-trace value-debug]])
    [ont-app.vocabulary.core :as voc]
-   ;; local
    [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
    )
   #?(:clj
      (:import
       [java.io ByteArrayInputStream ByteArrayOutputStream]
+      [ont_app.vocabulary.lstr LangStr]
       )))
 
 (voc/put-ns-meta!
@@ -45,7 +43,7 @@ It includes:
 (def prefixed
   "Returns `query`, with prefix declarations prepended
   Where
-  - `query` is a SPARQL query"
+  - `query` is presumed to be a SPARQL query"
   voc/prepend-prefix-declarations)
 
 (def ontology
@@ -86,6 +84,12 @@ It includes:
 (derive #?(:clj clojure.lang.LazySeq
            :cljs cljs.core.LazySeq )
         :rdf-app/TransitData)
+#?(:clj (derive java.lang.Long ::number)
+   :cljs (derive cljs.core.Long ::number)
+   )
+#?(:clj (derive java.lang.Double ::number)
+   :cljs (derive cljs.core..Double ::number)
+   )
 
 (declare transit-read-handlers)
 (defn read-transit-json
@@ -143,7 +147,7 @@ It includes:
 (spec/def ::transit-tag (spec/and string? (fn [s] (re-matches transit-re s))))
 
 (defn bnode-kwi?
-  "True when `kwi` matches output of `bnode-translator`."
+  "True when `kwi` matches the canonical bnode representation."
   [kwi]
   (->> (namespace kwi)
        (re-matches #"^_.*"))) 
@@ -168,11 +172,11 @@ Where
 (def transit-write-handlers
   "Atom of the form {`Class` `write-handler`, ...}
   Where
-  - `Class` is a direct reference to the class instance to be encoded
+  - `Class`, a symbol, is a direct reference to the class instance to be encoded
   - `write-handler` := fn [s] -> {`field` `value`, ...}
   " 
   (atom
-   {ont_app.vocabulary.lstr.LangStr
+   {LangStr
     (cognitect.transit/write-handler
      "ont-app.vocabulary.lstr.LangStr"
      (fn [ls]
@@ -182,7 +186,7 @@ Where
     }))
 
 (def transit-read-handlers
-  "Atom of the form {`className` `read-handler`
+  "Atom of the form {`className` `read-handler, ...}`
   Where
   - `className` is a fully qualified string naming a class to be encoded
   - `read-handler` := fn [from-rep] -> `instance`
@@ -211,7 +215,7 @@ Where
   "A function [x] -> `dispatch-value`
   Where
   - `x` is any value, probabaly an RDF literal
-  - `dispatch-value` is a value to be matched to a render-literal-dispatch method.
+  - `dispatch-value` is a value to be matched to a `render-literal-dispatch` method.
   Default is to return nil, signalling no special dispatch."
   (atom (fn [_] nil)))
 
@@ -229,30 +233,25 @@ Where
    (if-let [special-dispatch (@special-literal-dispatch literal)]
      special-dispatch
      ;; else no special dispatch...
-   (cond
-     (instance? ont_app.vocabulary.lstr.LangStr literal) :rdf-app/LangStr
-     :default (type literal)))))
+     (type literal))))
 
 (defmulti render-literal
-  "Returns an RDF (Turtle) rendering of `literal`"
+  "Returns an RDF (Turtle) rendering of `literal`
+  for methods with signature (fn [literal] -> `rdf`)"
   render-literal-dispatch)
 
 (defmethod render-literal :rdf-app/TransitData
   [v]
   (render-literal-as-transit-json v))
 
-(defmethod render-literal :rdf-app/LangStr
+
+(defmethod render-literal LangStr
   [ls]
   (str (quote-str (.s ls)) "@" (.lang ls)))
 
-#?(:clj (derive java.lang.Long ::number)
-   :cljs (derive cljs.core.Long ::number)
-   )
-#?(:clj (derive java.lang.Double ::number)
-   :cljs (derive cljs.core..Double ::number)
-   )
 
 (defmethod render-literal ::number
+  ;; ints and floats all derive from ::number
   ;; just insert the value directly
   [n]
   n)
@@ -299,7 +298,7 @@ Where
   - `rdf-store` is an RDF store.
   - `graph-uri` is either nil, a single graph-uri or a set of graph-uris
   "
-  [graph-uri rdf-store]
+  [graph-uri _rdf-store]
   (let [as-set (fn [gu] (if (set? gu) gu (set gu)))
         ]
     (merge @query-template-defaults
@@ -311,7 +310,7 @@ Where
                             "")
             })))
 
-(def subjects-query-template
+(def subjects-query-template "A 'stache template for a query ref'd in `query-for-subjects`, informed by `query-template-map` "
   ;; note the use of 3 brackets to turn off escaping
   "
   Select Distinct ?s
@@ -346,7 +345,7 @@ Where
      (map :s
           (query-fn rdf-store query)))))
 
-(def normal-form-query-template
+(def normal-form-query-template "A 'stache template for a query ref'd in `query-for-normal-form`, informed by `query-template-map` "
   "
   Select ?s ?p ?o
   {{{from-clauses}}}
@@ -408,7 +407,7 @@ Where
   "Logs a warning when `kwi` is in a namespace with no metadata."
   [kwi]
   (let [n (symbol (namespace kwi))]
-    (if-let [the-ns (find-ns n)]
+    (when-let [the-ns (find-ns n)]
       (when (not (meta the-ns))
         (warn ::NoMetaDataInNS
               :glog/message "The namespace for {{kwi}} is in a namespace with no associated metadata."
@@ -431,7 +430,7 @@ about blank nodes not being supported as first-class identifiers."
                                  {:type ::Invalid-URI-spec
                                   ::uri-spec uri-spec
                                   })))))))
-(def query-for-p-o-template
+(def query-for-p-o-template "A 'stache template for a query ref'd in `query-for-p-o`, informed by `query-template-map`"
   "
   Select ?p ?o
   {{{from-clauses}}}
@@ -444,7 +443,7 @@ about blank nodes not being supported as first-class identifiers."
   ")
 
 (defn query-for-p-o 
-  "Returns {`p` #{`o`...}...} for `s` at endpoint of `rdf-store`
+  "Returns {`p` #{`o`...}...} for `s` from query to `rdf-store`
 Where
   - `p` is a predicate URI rendered per binding translator of `rdf-store`
   - `o` is an object value, rendered per the binding translator of `rdf-store`
@@ -475,7 +474,7 @@ Where
              (query-fn rdf-store query))))))
 
 
-(def query-for-o-template
+(def query-for-o-template "A 'stache template for a query ref'd in `query-for-o`, informed by `query-template-map`"
   "
   Select ?o
   {{{from-clauses}}}
@@ -520,7 +519,7 @@ Where:
       (reduce collect-bindings #{}
               (query-fn rdf-store query))))))
 
-(def ask-s-p-o-template
+(def ask-s-p-o-template "A 'stache template for a query ref'd in `ask-s-p-o`, informed by `query-template-map`"
   "ASK
   {{{from-clauses}}}
   where
@@ -563,7 +562,10 @@ Where:
      [:resultOf starting]
      (ask-fn rdf-store query)))))
 
-
-
-
-
+;;;;;;;;;;;;;;;
+;;; DEPRECATED
+;;;;;;;;;;;;;;
+^:deprecated
+(defmethod render-literal :rdf-app/LangStr ;; using the type is fine
+  [ls]
+  (str (quote-str (.s ls)) "@" (.lang ls)))

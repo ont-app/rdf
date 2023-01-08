@@ -16,7 +16,8 @@
   :dc/creator "Eric D. Scott"
   })
 
-(def ontology-atom (atom (make-graph)))
+(def ontology-atom "An atom holding a native-normal graph containing a supporting vocabulary for the code in `ont-app.rdf.core`"
+  (atom (make-graph)))
 
 (defn ^:private update-ontology! [to-add]
   (swap! ontology-atom add to-add))
@@ -64,7 +65,7 @@ for this class."
 (update-ontology!
  [[:igraph/SerializationFormat
    :rdf/type :rdfs/Class
-   :rdfs/comment "Refers to a format used to encode/decode values"
+   :rdfs/comment "Refers to a format used to encode/decode serialized values"
    ]
   [:transit/format
    :rdfs/domain :igraph/SerializationFormat

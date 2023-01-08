@@ -18,13 +18,15 @@
 
 (deftest language-tagged-strings
   (testing "langstr dispatch"
-    (let [x #?(:clj #lstr "asdf@en"
-               :cljs (read-string "#lstr \"asdf@en\""))
+    (let [x #?(:clj #voc/lstr "asdf@en"
+               :cljs (read-string "#voc/lstr \"asdf@en\""))
           ]
       (is (= (str x) "asdf"))
       (is (= (lstr/lang x) "en"))
       (is (= (rdf-app/render-literal-dispatch x)
-             :rdf-app/LangStr))
+             ;; :rdf-app/LangStr
+             ont_app.vocabulary.lstr.LangStr
+             ))
       )))
 
 
@@ -69,8 +71,8 @@
   "Basic render-literal implementations for numbers and language-tagged strings"
   (is (= (str (rdf-app/render-literal 1)) "1"))
   (is (= (str (rdf-app/render-literal 1.0)) "1.0"))
-  (is (= (str (rdf-app/render-literal #?(:clj #lstr "dog@en"
-                                         :cljs (read-string "#lstr \"dog@en\"")
+  (is (= (str (rdf-app/render-literal #?(:clj #voc/lstr "dog@en"
+                                         :cljs (read-string "#voc/lstr \"dog@en\"")
                                          ))
               "\"dog\"@en"))))
 

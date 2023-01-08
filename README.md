@@ -7,6 +7,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 ## Contents
 - [Dependencies](#h2-dependencies)
 - [Motivation](#h2-motivation)
+- [Supporting Ontology](supporting-ontology)
 - [Literals](#h2-literals)
   - [The `render-literal` multimethod](#h3-render-literal-multimethod)
     - [`@special-literal-dispatch`](#h4-special-literal-dispatch)
@@ -15,7 +16,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
   - [Transit-encoded-values](#h3-transit-encoded-values)
 - [Query templates supporting the IGraph member-access methods](#h2-query-templates)
 - [Debugging](#h2-debugging)
-
+- [URI namespace mappings](uri-namespace-mappings)
 <a name="h2-dependencies"></a>
 ## Dependencies
 
@@ -27,32 +28,36 @@ Require thus:
   [ont-app.rdf.core :as rdf-app]
   )      
 ```
-
-### URI namespace mappings
-The namepace metadata of the core maps to `ont-app.rdf.ont`, whose
-preferred prefix is `rdf-app` (since `rdf` is already spoken for with _ont-app.vocabulary.rdf_).
-
-The preferred namespace URI is declared as
-`"http://rdf.naturallexicon.org/rdf/ont#"`.
     
 <a name="h2-motivation"></a>
 ## Motivation
 There are numerous RDF-based platforms, each with its own
 idosyncracies, but there is also a significant overlap between the
-underlying logical structure of each RDF platform. This library aims
+underlying logical structure of each such platform. This library aims
 to capture that overlap, parameterized appropriately for
 implementation-specific variations.
 
 This includes:
-- A multimethod `render-literal`, aimed at translating between clojure
+- A multimethod `render-literal`, aimed at translating between Clojure
   data and data to be stored in an RDF store.
-- Support for language-tagged strings with `#lstr` reader macro
+- Support for language-tagged strings with `#voc/lstr` reader macro
   defined in the [vocabulary](https://github.com/ont-app/vocabulary) module.
 - Support for a `^^transit:json` datatype tag, allowing for arbitrary
-  clojure content to be serialized/deserialized as strings in
+  Clojure content to be serialized/deserialized as strings in
   an RDF store.
 - SPARQL query templates and supporting code to query for the standard
-  member access methods of the IGraph protocol.
+  member access methods of the
+  [IGraph](https://github.com/ont-app/igraph) protocol.
+
+## Supporting ontology
+
+There is a small supporting ontology defined in `ont-app.rdf.ont`,
+which the namepace metadata of the core maps to. Its preferred prefix
+is `rdf-app` (since `rdf` is already spoken for with
+_ont-app.vocabulary.rdf_).
+
+The preferred namespace URI is declared as
+`"http://rdf.naturallexicon.org/rdf/ont#"`.
 
 <a name="h2-literals"></a>
 ## Literals
@@ -61,31 +66,34 @@ This includes:
 ### The `render-literal` multimethod
 
 Each RDF-based implementation of IGraph will need to translate between
-clojure data and RDF literals. These will include langage-tagged
+Clojure data and RDF literals. These will include langage-tagged
 strings, xsd types for the usual scalar values, and possibly custom
 URI-tagged data. Sometimes the specific platform will already define
-its own intermediate datastructures for such literals. 
+its own intermediate data structures for such literals. 
 
 The `render-literal`
 [multimethod](https://clojure.org/reference/multimethods) exists to
-handle the task of translating between these contexts.
+handle the task of translating from Clojure to RDF.
 
 `render-literal` is dispatched by the function
 `render-literal-dispatch`, which takes as an argument a single
 literal, and returns a value expected to be fielded by some
 _render-literal_ method keyed to that value.
 
-By default, instances of the LangStr record (described
-[below](#h3-language-tagged-strings)) will be dispatched on `::LangStr`,
-with a method defined to return say `"my word"@en`.  otherwise the
-dispatch value will be the type of the literal.
+There is a _translate-literal_ method defined for
+`:rdf-app/TransitData`, discussed in more detail
+[below](#h3-transit-encoded-values). Otherwise `render-literal` is
+dispatched on the type of the argument.
 
-Integers and floats will be rendered directly by default. Values
-unhandled by a specific method will default to be rendered in quotes.
+Integers and floats both derive from `::number`, and will be rendered
+directly as they are in Clojure by default. Values unhandled by a
+specific method will default to be rendered as strings in quotes.
 
-There is a _translate-literal_ method defined for `:rdf-app/TransitData`,
-discussed in more detail [below](#h3-transit-encoded-values).
+Instances of `LangStr` will be rendered as [discussed
+below](h3-language-tagged-strings).
 
+All of this behavior can be overridden with the
+`@special-literal-dispatch` atom descussed in the following section.
 
 <a name="h4-special-literal-dispatch"></a>
 #### `@special-literal-dispatch` 
@@ -93,7 +101,12 @@ discussed in more detail [below](#h3-transit-encoded-values).
 Often there is platform-specific behavior required for specific types
 of literals, for example grafter has its own way of handling xsd values.
 
-There is an atom defined called `special-literal-dispatch` (defult nil) which if non-nil should be a function `f [x] -> <dispatch-value>`. Any non-nil dispatch value returned by this function will override the default behavior of _render-literal-dispatch_, and provide a dispatch value to which you may target the appropriate methods.
+There is an atom defined called `special-literal-dispatch` (defult
+nil) which if non-nil should be a function `f [x] ->
+<dispatch-value>`. Any non-nil dispatch value returned by this
+function will override the default behavior of
+_render-literal-dispatch_, and provide a dispatch value to which you
+may target the appropriate methods.
 
 The [igraph-grafter](https://github.com/ont-app/igraph-grafter) source
 has examples of this.
@@ -101,12 +114,12 @@ has examples of this.
 <a name="h3-language-tagged-strings"></a>
 ### Language-tagged strings
 
-This library imports 'ont-app.vocabulary.lstr', along with its #lstr
+This library imports 'ont-app.vocabulary.lstr', along with its #voc/lstr
 reader macro.
 
-Such values will be dispatched to _render-literal_ as _:rdf/LangStr_,
-but the _render-literal_ method for LangStr is expected to be
-platform-specific.
+Such values will be dispatched on their type
+(`ont_app.vocabulary.lstr.LangStr`), and rendered as say `"my English
+words"@en`.
 
 <a name="h3-xsd-values"></a>
 ### `xsd` values
@@ -139,28 +152,31 @@ This library supports storing such literals in serialized form using a
 > (rdf-app/read-transit-json "[1,2,3]")
 [1 2 3]
 
-> (def round-trip [x]
-    (-> (re-matches rdf-app/transit-re (rdf-app/render-literal x))
-        (nth 1))
-        (rdf-app/read-transit-json))
+> (defn round-trip [x]
+    "Returns `x` after converting it to a transit literal and re-parsing it"
+    (as-> (rdf-app/render-literal x) 
+        it
+        (re-matches rdf-app/transit-re it)
+        (nth it 1))
+        (rdf-app/read-transit-json it))
         
 > (round-trip `(fn [x] "yowsa"))
-(fn [x] "yowsa")
+(clojure.core/fn [x] "yowsa")
 
 ```
 The _render-literal_ method keyed to `:rdf/TransitData` is the handler
 encoding data as transit. To use it, take the following steps:
 
-- As needed, add a translit [_read handler_](https://cognitect.github.io/transit-clj/#cognitect.transit/read-handler) to `transit-read-handlers`. 
+- As needed, add a transit [_read handler_](https://cognitect.github.io/transit-clj/#cognitect.transit/read-handler) to `transit-read-handlers`. 
   - Note in core.cljc that LangStr already has such such a handler
 - As needed, add a transit [_write handler_](https://cognitect.github.io/transit-clj/#cognitect.transit/write-handler) to `transit-write-handlers`
   - Again, the LangStr record is already covered, and should serve as a good example.
 - Use [_derive_](https://clojuredocs.org/clojure.core/derive) to make
   the data type to be rendered a descendent of
-  `:rdf/TransitData`. This will make the eligible for handling by that
+  `:rdf/TransitData`. This will make this eligible for handling by that
   _render-literal_ method.
   - e.g. `(derive clojure.lang.PersistentVector :rdf/TransitData)`
-  - All the usual clojure containers already have such _derive_ declarations.
+  - All the usual Clojure containers already have such _derive_ declarations.
 - Transit rendering for any such type can disabled using _underive_.
 
 
@@ -186,7 +202,8 @@ It is expected that the basic IGraph member-access methods will be
 covered by a common set of SPARQL queries for most if not all
 RDF-based implementations.
 
-For example, here is a template that should serve to acquire normal form of a given graph (modulo tractability):
+For example, here is a template that should serve to acquire normal
+form of a given graph (modulo tractability):
 
 ```
 (def normal-form-query-template
@@ -211,9 +228,9 @@ This template can be referenced by a function `query-for-normal-form`
 ```
 Where:
 
-- `<graph-kwi>` is a KWI for the named graph URI. May also be a set of named graph URIs. (defaults to _nil_, indicating the DEFAULT graph). 
-- `<query-fn>` is a platform-specific function to pose the rendered query template to _rdf-store_.
-- `<rdf-store>` is a platform-specific point of access to the RDF store, e.g. a database connection or SPARQL endpoint.
+- `graph-kwi` is a KWI for the named graph URI. May also be a set of named graph URIs. (defaults to _nil_, indicating the DEFAULT graph). 
+- `query-fn` is a platform-specific function to pose the rendered query template to _rdf-store_.
+- `rdf-store` is a platform-specific point of access to the RDF store, e.g. a database connection or SPARQL endpoint.
 
 Analogous template/function ensembles are defined for:
 - `query-for-subjects`
@@ -238,12 +255,17 @@ Note that the query template above has clauses like:
 The purpose of this is to allow for rebinding of blank nodes to a
 platform-specific scheme that supports
 '[round-tripping](https://aidanhogan.com/docs/bnodes.pdf)' of blank
-nodes in subsequent queries to the same endpoint. The [igraph-jena](https://github.com/ont-app/igraph-jena) project provides a working example of this.
+nodes in subsequent queries to the same endpoint. The
+[igraph-jena](https://github.com/ont-app/igraph-jena) project provides
+a working example of this.
 
 
 <a name="h2-debugging"></a>
 ## Debugging
-In addition to standard logging, functions in this module are logged with the [graph-log](https://github.com/ont-app/graph-log) logging library, which records various execution events at log levels `:glog/TRACE` and `:glog/DEBUG`.
+Functions in this module are logged with the
+[graph-log](https://github.com/ont-app/graph-log) logging library,
+which in addition to doing standard logging records various execution
+events at log levels `:glog/TRACE` and `:glog/DEBUG`.
 
 This can be enabled thus:
 
@@ -264,7 +286,7 @@ See the graph-log documentation for details.
 
 ## License
 
-Copyright © 2020 Eric D. Scott
+Copyright © 2020-23 Eric D. Scott
 
 This program and the accompanying materials are made available under the
 terms of the Eclipse Public License 2.0 which is available at

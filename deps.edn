@@ -7,8 +7,7 @@
                                     ;; ... per nvd warning CVE-2022-41719
                                     }
          com.cognitect/transit-clj {:mvn/version "1.0.329"}
-         ;; TODO: support cljs
-         ;; com.cognitect/transit-cljs {:mvn/version "0.8.280"}
+         com.cognitect/transit-cljs {:mvn/version "0.8.280"}
          ont-app/graph-log {:mvn/version "0.2.0"}
          
         }
@@ -39,6 +38,7 @@
                    :ns-default build
                    }
 
+            ;; TODO: support cljs
            ;;;;;;;;;;;;;;;;;;;;;;;;;;
            ;; CLOJURESCRIPT SUPPORT
            ;;;;;;;;;;;;;;;;;;;;;;;;;;

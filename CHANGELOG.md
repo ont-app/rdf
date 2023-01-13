@@ -1,3 +1,9 @@
+- v 0.2.2:
+  - Got clumsy with the release tagging, which CI did not
+    forgive. Bumping the version to goose it a bit.
+  - Tweaking Makefile
+- v 0.2.1:
+  - commenting transit-cljs back in to address issue #6
 - v 0.2.0:
   - lein project.clj -> clojure deps.edn
   - Fix for issue 5 (multiple FROM clauses)

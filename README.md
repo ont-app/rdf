@@ -7,7 +7,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 ## Contents
 - [Dependencies](#h2-dependencies)
 - [Motivation](#h2-motivation)
-- [Supporting Ontology](supporting-ontology)
+- [Supporting Ontology](#supporting-ontology)
 - [Literals](#h2-literals)
   - [The `render-literal` multimethod](#h3-render-literal-multimethod)
     - [`@special-literal-dispatch`](#h4-special-literal-dispatch)
@@ -16,7 +16,7 @@ Part of the ont-app library, dedicated to Ontology-driven development.
   - [Transit-encoded-values](#h3-transit-encoded-values)
 - [Query templates supporting the IGraph member-access methods](#h2-query-templates)
 - [Debugging](#h2-debugging)
-- [URI namespace mappings](uri-namespace-mappings)
+
 <a name="h2-dependencies"></a>
 ## Dependencies
 
@@ -90,7 +90,7 @@ directly as they are in Clojure by default. Values unhandled by a
 specific method will default to be rendered as strings in quotes.
 
 Instances of `LangStr` will be rendered as [discussed
-below](h3-language-tagged-strings).
+below](#h3-language-tagged-strings).
 
 All of this behavior can be overridden with the
 `@special-literal-dispatch` atom descussed in the following section.

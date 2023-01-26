@@ -10,7 +10,7 @@
  'ont-app.rdf.ont
  {
   :vann/preferredNamespacePrefix "rdf-app"
-  :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/rdf/ont#"
+  :vann/preferredNamespaceUri "http://rdf.naturallexicon.org/ont-app/rdf/ont#"
   :doc "Namespace for constructs used by RDF-based Igraph implementations"
   :dc/description "Namespace for constructs used by RDF-based Igraph implementations in Clojure."
   :dc/creator "Eric D. Scott"
@@ -21,6 +21,12 @@
 
 (defn ^:private update-ontology! [to-add]
   (swap! ontology-atom add to-add))
+
+;; I/O methods
+(update-ontology!
+ [[:rdf-app/dispatchAs
+   :rdfs/comment "asserts an ID characterizing how some element of a multi-method should be dispatched. Typically referenced in the 'context' argument of on i/o method"
+   ]])
 
 ;; LITERAL TYPES
 (update-ontology!
@@ -89,3 +95,34 @@ for this class."
    encoded for format :msgpack (not currently supported)"
    ]
   ])
+
+;; TEST SUPPORT
+(update-ontology!
+ [[:rdf-app/RDFImplementationReport
+   :rdf/type :rdfs/Class
+   :dc/description "A report for some implemenation of the rdf module testing things like how blank nodes are handled and transit serialization. Builds on ont-app.igraph.test-support"
+   ]
+  [:rdf-app/makeGraphFn
+   :rdfs/domain :rdf-ap/RDFImplemantationReport
+   :dc/description "A function [] -> RDF IGraph implemenation, used to produce the implemenation report"
+   ]
+  [:rdf-app/readFileFn
+   :rdfs/domain :rdf-ap/RDFImplemantationReport
+   :dc/description "A function [g rdf-file-path] -> g'. Where g' is an RDF IGraph implemenation; used to produce the implemenation report"
+   ]
+  [:rdf-app/writeFileFn
+   :rdfs/domain :rdf-ap/RDFImplemantationReport
+   :dc/description "A function [g rdf-file-path] -> ?. With side-effect of writing an RDF file to file-path s.t. it can be read by readFileFn; used to produce the implemenation report"
+   ]
+  [:rdf-app/TestSupportTest
+   :rdf/type :rdfs/Class;
+   :dc/description "Names a to be performed against an implementation of the igraph/rdf library"
+   ]
+  [:rdf-app/AllSubjectsAreBnodes :rdf/type :rdf-app/TestSupportTest]
+  [:rdf-app/BnodeQueryForSuperSub :rdf/type :rdf-app/TestSupportTest]
+  [:rdf-app/BnodeSuperShouldRoundTrip :rdf/type :rdf-app/TestSupportTest]
+  [:rdf-app/BnodeTraversalsShouldWork :rdf/type :rdf-app/TestSupportTest]
+  [:rdf-app/TransitDataShouldRoundTrip :rdf/type :rdf-app/TestSupportTest]
+  ] 
+ )
+

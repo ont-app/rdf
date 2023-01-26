@@ -14,14 +14,17 @@ It includes:
   (:require
    [clojure.string :as s]
    [clojure.spec.alpha :as spec]
+   [clojure.java.io :as io]
    ;; 3rd party
    [cljstache.core :as stache]
    [cognitect.transit :as transit]
    ;; ont-app
    #?(:clj [ont-app.graph-log.levels :as levels
-            :refer [warn debug value-trace value-debug]]
+            :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
-            :refer-macros [warn debug value-trace value-debug]])
+             :refer-macros [warn debug value-trace value-debug]])
+   [ont-app.igraph.core :as igraph :refer [unique]]
+   [ont-app.igraph.graph :as native-normal]
    [ont-app.vocabulary.core :as voc]
    [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
@@ -138,21 +141,319 @@ It includes:
       value)))
 
 ;; NO READER MACROS BELOW THIS POINT
+;; except in try/catch clauses
+
 
 ;; SPECS
 (def transit-re
   "Matches data tagged as transit:json"
-  #"^\"(.*)\"\^\^transit:json$")
+  (re-pattern (str "^\"" ;; start with quote
+                   "(.*)" ;; anything (group 1)
+                   "\"" ;; terminal quote
+                   "\\^\\^" ;; ^^
+                   "transit:json$" ;; end with type tag
+                   )))
+
 
 (spec/def ::transit-tag (spec/and string? (fn [s] (re-matches transit-re s))))
 
 (defn bnode-kwi?
   "True when `kwi` matches the canonical bnode representation."
   [kwi]
-  (->> (namespace kwi)
-       (re-matches #"^_.*"))) 
+  (and (keyword? kwi)
+       (some->> (namespace kwi)
+                (str)
+                (re-matches #"^_.*"))))
 
 (spec/def ::bnode-kwi bnode-kwi?)
+
+(spec/def ::file-resource (fn [url] (and (instance? java.net.URL url)
+                                             (-> (.getProtocol url)
+                                                 #{"file"}))))
+
+
+(spec/def ::web-resource (fn [url] (and (instance? java.net.URL url)
+                                        (-> (.getProtocol url)
+                                            #{"http" "https"}))))
+
+
+
+;;;;;;;;;;;;;;;;;;
+;; INPUT/OUTPUT
+;;;;;;;;;;;;;;;;;;
+
+(def default-context
+  "An atom containing a native-normal graph with default i/o context configurations.
+  - NOTE: This would typically be the starting point for the i/o context of  individual
+    implementations.
+  - VOCABULARY
+    - [:rdf-app/UrlCache :rdf-app/directory `URL cache directory`]
+  "
+  (atom (-> (native-normal/make-graph)
+            (igraph/add [[:rdf-app/UrlCache
+                          :rdf-app/directory "/tmp/rdf-app/UrlCache"]
+                         ]))))
+
+(defn standard-import-dispatch
+  "Returns a standard `dispatch-key` for `to-import`
+  - Where
+    - `to-import` is typically an argument to the `load-rdf` or `read-rdf` methods.
+    - `dispatch-key` :~ #{:rdf-app/LocalFile, :rdf-app/FileResource :rdf/WebResource}
+      or the type of `to-import`.
+    - :rdf-app/LocalFile indicates that `to-import` is a local path string
+    - :rdf-app/FileResource indicates that `to-import` is a resource in a JAR
+    - :rdf-app/WebResource indicates something accessible through a curl call.
+  "
+  [to-import]
+  (cond
+    (and (string? to-import)
+         (.exists (io/file to-import)))
+    :rdf-app/LocalFile
+
+    (and (instance? java.io.File to-import)
+         (.exists to-import))
+    :rdf-app/LocalFile
+    
+    (spec/valid? ::file-resource to-import)
+    :rdf-app/FileResource
+
+    (spec/valid? ::web-resource to-import)       
+    :rdf-app/WebResource
+
+    :else (type to-import))
+  )
+
+
+(declare load-rdf-dispatch)
+(defmulti load-rdf
+  "Returns a new IGraph with contents for `to-load`,
+  - args: [`context` `to-load`]
+  - dispatched on: [`graph-dispatch` `to-load-rdf-dispatch`]
+  - Where
+    - `context` is a native-normal graph with descriptions per the vocabulary below.
+       It may also provide platform-specific details that inform specific methods.
+    - `to-load` is typically a path or URL, but could be anything you write a method for
+      - if this is a file name that exists in the local file system this will be
+        dispatched as `:rdf-app/LocalFile`. We may need to derive `file-extension`.
+    - `graph-dispatch` is the dispatch value identifying the IGraph implementation
+    - `to-load-rdf-dispatch` is the dispatch value derived for `to-load-rdf`
+    - `file-extension` may be implicit from a file name or derived per vocabulary below
+       It may be necesary to inform your RDF store about the expected format.
+ 
+  - VOCABULARY (in `context`)
+    - [`#'load-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]
+    - [`#'load-rdf` :rdf-app/toImportDispatchFn (fn [to-load] -> to-load-dispatch)]
+      ... optional. Defaults to (type to-load)
+    - [`#'load-rdf` :rdf-app/extensionFn (fn [to-load] -> file-extension)]
+      ... optional. By default it parses the presumed path name described by `to-load`
+    - [rdf-app/UrlCache rdf-app/directory `cache-directory`]
+    - [rdf-app/UrlCache rdf-app/cacheMaintenance :rdf-app/DeleteOnRead]
+      ... optional. specifies that a cached file should be deleted after a read.
+      - by default it will not be deleted.
+  "
+  ;; There's a tricky circular dependency here in reference to #'load-rdf....
+  (fn [context to-load] (load-rdf-dispatch context to-load)))
+
+(defn load-rdf-dispatch
+  "Returns [graph-dispatch to-load-dispatch]. See docstring for `rdf/load-rdf`"
+  [context to-load]
+  {:pre [(fn [context _] (context #'load-rdf :rdf-app/hasGraphDispatch))
+         ]
+   }
+  ;; return [graph-dispatch, to-load-dispatch] ...
+  [(unique (context #'load-rdf :rdf-app/hasGraphDispatch))
+   ,
+   (if-let [to-load-dispatch (unique (context #'load-rdf  :rdf-app/toImportDispatchFn))]
+     (to-load-dispatch to-load)
+     ;; else no despatch function was provided
+     (standard-import-dispatch to-load))
+   ])
+   
+
+;; URL caching
+
+(defn cached-file-path
+  "Returns a canonical path for cached contents read from a URL."
+  [& {:keys [dir url stem ext]}]
+  (assert dir)
+  (str dir  "/" stem "_hash=" (hash url) "." ext))
+
+
+(defn parse-url
+  [url]
+  (let [path (.getPath url)
+        stem-extension (re-pattern
+                        (str "^.*/" ;; start with anything ending in slash
+                             "([^/]+)" ;; at least one non-slash (group 1)
+                             "\\." ;; dot
+                             "(.*)$" ;; any ending, (group 2)
+                             ))
+        matches (re-matches stem-extension path)
+    ]
+  (if-let [[_ stem ext] matches]
+    {:url (str url)
+     :path path
+     :stem stem
+     :ext ext
+     })))
+
+(defn get-cached-file-path-spec
+  "Returns `m` s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
+  - Where
+    - `url` (as arg) is x s.t. (str x) -> a URL string
+    - `context` is an native-normal graph describing the I/O context
+    - `url` (as key) is a URL string
+    - `path` is the path component of `url`
+    - `stem` is the 'stem portion of /path/to/<stem>.<ext>
+    - `ext`  is the 'ext' portion of /path/to/<stem>.<ext>
+    - `dir`  is the directory containing cache files
+  - NOTE: this should be sufficient to create a unique temp file path for caching
+    contents of `url`.
+  - VOCABULARY
+    - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
+      - optional. Default will try to parse `m` from `url` itself
+    - [:rdf-app/UrlCache :rdf-app/directory `dir`]  
+    - `cached-file-path-fn` := fn (uri) -> `m`
+  "
+  [context url]
+
+  (or (if-let [cached-file-path-fn (unique (context :rdf-app/UrlCache :rdf-app/pathFn))
+              ]
+        (cached-file-path-fn url)
+        ;; else there is no pathFn, try to parse the URL...
+        (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
+              ]
+          (assoc (parse-url url)
+                 :dir dir)))))
+
+(defn import-url-via-temp-file
+  "RETURNS `g`, with contents of `url` loaded
+  SIDE-EFFECT: creates file named `cached-file-path` if it does not already exist.
+  - Where
+    - `context` is a native-normal graph informed by vocabulary below.
+    - `import-fn` := fn [context cached-file-path] -> g,
+    - `url` := a URL or string naming URL
+    - `cached-file-path` names a local file to contain contents from `url`
+  - VOCABULARY (for `context`)
+    - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
+      - optional. Default will try to parse `parse-map` from `url` itself
+    - [:rdf-app/UrlCache :rdf-app/directory `cache-directory`]
+    - [:rdf-app/UrlCache :rdf-app/cacheMaintenance `rdf-app/DeleteOnRead`]
+      - optional. Will delete the cached file on successful read when specified
+    - `cached-file-path-fn` := fn (uri) -> `parse-map`
+    - `parse-map` := m s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
+  "
+  [context import-fn url]
+  (if-let [temp-file-path (some-> (get-cached-file-path-spec context url)
+                                  (cached-file-path))
+           ]
+    (let [read-successful? (atom false)
+          ]
+      (when (not (.exists (io/file temp-file-path)))
+        (io/make-parents temp-file-path)
+        (spit temp-file-path
+              (slurp url)))
+      (try (let [g (import-fn context temp-file-path)
+                 ]
+             (reset! read-successful? true)
+           g)
+         (catch #?(:clj Throwable :cljs js/Error) e
+           (throw (ex-info "Error importing from URL"
+                           (merge (ex-data e)
+                                  {:type ::ErrorImportingFromURL
+                                   :context context
+                                   :url (str url)
+                                   :temp-file-path temp-file-path
+                                   }))))
+         (finally (when (and
+                         @read-successful?
+                         (context :rdf-app/UrlCache
+                                  :rdf-app/cacheMaintenance :rdf-app/DeleteOnRead))
+                    (io/delete-file temp-file-path)))))
+    ;; else no temp-file-path could be inferred
+    (throw (ex-info (str "No caching path could be inferred for %s" url)
+                    {:type ::NOCachingPathCouldBeInferredForURL
+                     ::context context
+                     ::url url
+                     }))
+    ))
+
+
+(defmethod load-rdf [:rdf-app/IGraph java.net.URL]
+  ;; default behavior to load URLs.
+  ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
+  [context to-load]
+  (import-url-via-temp-file context load-rdf to-load))
+  
+(defmethod load-rdf :default
+  [context file-id]
+  (throw (ex-info "No method for rdf/load-rdf"
+                  {:type ::NoMethodForTempLoadRdf
+                   ::context context
+                   ::file file-id
+                   ::dispatch (load-rdf-dispatch context file-id)
+                   })))
+
+(declare read-rdf-dispatch)
+(defmulti read-rdf
+  "Side-effect: updates `g` with added contents from `to-read`,
+  Returns: modified `g`
+  - args: [context g to-read]
+  - dispatched on: [graph-dispatch to-read-dispatch]
+  - Where
+    - `context` is a native-normal graph with descriptions per the vocabulary below.
+       It may also provide platform-specific details that inform specific methods.
+    - `to-read` is typically a path or URL, but could be anything you write a method for
+      - if this is a file name that exists in the local file system this will be
+        dispatched as `:rdf-app/LocalFile`. We may need to derive `file-extension`.
+    - `graph-dispatch` is the dispatch value identifying the IGraph implementation
+    - `to-read-dispatch` is the dispatch value derived for `to-read`
+  
+    - `file-extension` may be implicit from a file name or derived per vocabulary below
+       It may be necesary to inform your RDF store about the expected format.
+ 
+  - VOCABULARY (in `context`)
+  - [`#'read-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]
+  - [`#'read-rdf` :rdf-app/toImportDispatchFn (fn [to-read] -> `to-read-dispatch`)]
+    ... optional. Defaults to (type to-read)
+  - [`#'read-rdf` :rdf-app/extensionFn (fn [to-read] -> file-extension)]
+    ... optional. By default it parses the presumed path name described by `to-read`
+  "
+  ;; There's a tricky circular dependency here in reference to #'read-rdf....
+  (fn [context g to-read] (read-rdf-dispatch context g to-read)))
+
+(defn read-rdf-dispatch
+  "Returns [graph-dispatch to-read-dispatch]. See docstring for `rdf/read-rdf`"
+  [context g to-read]
+  {:pre [(fn [context _] (context #'read-rdf :rdf-app/hasGraphDispatch))
+         ]
+   }
+  ;; return vector...
+  [(unique (context #'read-rdf :rdf-app/hasGraphDispatch))
+   ,
+   (if-let [to-read-dispatch (unique (context #'read-rdf :rdf-app/toImportDispatchFn))]
+     (to-read-dispatch to-read)
+     ;; else no despatch function was provided
+     (standard-import-dispatch to-read))
+   ])
+
+(defmethod read-rdf [:rdf-app/IGraph java.net.URL]
+  ;; default behavior to load URLs.
+  ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
+  [context g url]
+  (let [do-read-rdf (fn [context url]
+                      (read-rdf context g url))
+        ]
+  (import-url-via-temp-file context do-read-rdf url)))
+  
+(defmethod read-rdf :default
+  [context file-id]
+  (throw (ex-info "No method for rdf/read-rdf"
+                  {:type ::NoMethodForTempLoadRdf
+                   ::context context
+                   ::file file-id
+                   ::dispatch (read-rdf-dispatch context file-id)
+                   })))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; LITERAL SUPPORT
@@ -420,7 +721,7 @@ Where
 about blank nodes not being supported as first-class identifiers."
   [uri-spec]
   (if (bnode-kwi? uri-spec)
-    uri-spec
+    (name uri-spec)
     ;;else not a blank node
     (try
       (voc/qname-for (check-ns-metadata uri-spec))
@@ -444,7 +745,7 @@ about blank nodes not being supported as first-class identifiers."
 
 (defn query-for-p-o 
   "Returns {`p` #{`o`...}...} for `s` from query to `rdf-store`
-Where
+  Where
   - `p` is a predicate URI rendered per binding translator of `rdf-store`
   - `o` is an object value, rendered per the binding translator of `rdf-store`
   - `s` is a subject uri keyword. ~ voc/voc-re
@@ -452,26 +753,33 @@ Where
   - `query-fn` := fn [repo] -> bindings
   - `graph-uri` is a URI or KWI naming the graph, or a set of them
     (or nil if DEFAULT graph)
-"
+  "
   ([query-fn rdf-store s]
    (query-for-p-o nil  query-fn rdf-store s)
    )
-  (
-  [graph-uri query-fn rdf-store s]
-  (let [query  (prefixed
-                (stache/render query-for-p-o-template
-                               (merge (query-template-map graph-uri rdf-store)
-                                      {:subject (check-qname s)})))
-        collect-bindings (fn [acc b]
-                           (update acc (:p b)
-                                   (fn[os] (set (conj os (:o b))))))
-                                                
-        ]
-    (value-debug
-     ::query-for-po
-     [::query query ::subject s]
-     (reduce collect-bindings {}
-             (query-fn rdf-store query))))))
+  ([graph-uri query-fn rdf-store s]
+   {:pre [(not (nil? s))
+          ]
+    }
+   (debug ::Starting_query-for-p-o
+          ::graph-uri graph-uri
+          ::query-fn query-fn
+          ::rdf-store rdf-store
+          ::s s)
+   (let [query  (prefixed
+                 (stache/render query-for-p-o-template
+                                (merge (query-template-map graph-uri rdf-store)
+                                       {:subject (check-qname s)})))
+         collect-bindings (fn [acc b]
+                            (update acc (:p b)
+                                    (fn[os] (set (conj os (:o b))))))
+         
+         ]
+     (value-debug
+      ::query-for-po
+      [::query query ::subject s]
+      (reduce collect-bindings {}
+              (query-fn rdf-store query))))))
 
 
 (def query-for-o-template "A 'stache template for a query ref'd in `query-for-o`, informed by `query-template-map`"

@@ -1,0 +1,9 @@
+@base <http://rdf.naturallexicon.org/ont-app/rdf/ont> .
+@prefix : <#>.
+
+    [ a :Test ;
+        :hasSubordinate [
+            a :Subordinate ;
+            :value 42 ;
+        ] ;
+    ] .

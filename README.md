@@ -15,6 +15,16 @@ Part of the ont-app library, dedicated to Ontology-driven development.
   - [`xsd` values](#h3-xsd-values)
   - [Transit-encoded-values](#h3-transit-encoded-values)
 - [Query templates supporting the IGraph member-access methods](#h2-query-templates)
+- [I/O](#i-o)
+  - [The context graph](#the-context-graph)
+  - [Special dispatch KWIs](#special-dispatch-kwis)
+  - [The resource catalog](#the-resource-catalog)
+  - [Input](#input)
+    - [load-rdf](#load-rdf)
+    - [read-rdf](#read-rdf)
+  - [Output](#output)
+    - [write-rdf](#write-rdf)
+- [Test Support](#test-support)
 - [Debugging](#h2-debugging)
 
 <a name="h2-dependencies"></a>
@@ -33,7 +43,7 @@ Require thus:
 ## Motivation
 There are numerous RDF-based platforms, each with its own
 idosyncracies, but there is also a significant overlap between the
-underlying logical structure of each such platform. This library aims
+underlying logical structure of each RDF implementation. This library aims
 to capture that overlap, parameterized appropriately for
 implementation-specific variations.
 
@@ -48,6 +58,7 @@ This includes:
 - SPARQL query templates and supporting code to query for the standard
   member access methods of the
   [IGraph](https://github.com/ont-app/igraph) protocol.
+- Multi-methods for basic import/export of RDF-encoded data.
 
 ## Supporting ontology
 
@@ -87,7 +98,7 @@ dispatched on the type of the argument.
 
 Integers and floats both derive from `::number`, and will be rendered
 directly as they are in Clojure by default. Values unhandled by a
-specific method will default to be rendered as strings in quotes.
+specific method will be rendered by default as strings in quotes.
 
 Instances of `LangStr` will be rendered as [discussed
 below](#h3-language-tagged-strings).
@@ -99,7 +110,9 @@ All of this behavior can be overridden with the
 #### `@special-literal-dispatch` 
 
 Often there is platform-specific behavior required for specific types
-of literals, for example grafter has its own way of handling xsd values.
+of literals, for example
+[Swirrl/grafter](https://github.com/Swirrl/grafter) has its own way of
+handling xsd values.
 
 There is an atom defined called `special-literal-dispatch` (defult
 nil) which if non-nil should be a function `f [x] ->
@@ -177,7 +190,7 @@ encoding data as transit. To use it, take the following steps:
   _render-literal_ method.
   - e.g. `(derive clojure.lang.PersistentVector :rdf/TransitData)`
   - All the usual Clojure containers already have such _derive_ declarations.
-- Transit rendering for any such type can disabled using _underive_.
+- Transit rendering for any such type can be disabled using _underive_.
 
 
 The datatype URI whose qname is _transit:json_ expands to
@@ -258,6 +271,218 @@ platform-specific scheme that supports
 nodes in subsequent queries to the same endpoint. The
 [igraph-jena](https://github.com/ont-app/igraph-jena) project provides
 a working example of this.
+
+<a name="i-o"></a>
+## I/O
+
+There are multimethods defined to read RDF into a graph and to write
+it out in a specified format.
+
+See the implementation of
+[ont-app/igraph-jena](https://github.com/ont-app/igraph-jena) for an
+implementation (v. 0.2.2 or later).
+
+### The context graph
+
+Each of these methods takes a
+[native-normal](https://github.com/ont-app/igraph#Graph) `context`
+graph as its first argument. See the docstrings of each of the i/o
+functions for the operative vocabularies.
+
+As an example, here is the default 'starter' graph provided in rdf.core:
+
+
+```
+;; in ont-app-rdf.core
+
+(def default-context
+  "An atom containing a native-normal graph with default i/o context configurations.
+  - NOTE: This would typically be the starting point for the i/o context of  individual
+    implementations.
+  - VOCABULARY
+    - [:rdf-app/UrlCache :rdf-app/directory `URL cache directory`]
+  "
+  (atom (-> (native-normal/make-graph)
+            (igraph/add [[:rdf-app/UrlCache
+                          :rdf-app/directory "/tmp/rdf-app/UrlCache"]
+                         ]))))
+```
+
+Note that it configures a default directory for caching imported web
+resources.
+
+
+And here is the current context graph for `igraph-jena`:
+
+```
+;; in ont-app.igraph-jena.core
+
+(defrecord JenaGraph ...)
+
+(def standard-io-context
+  (-> @rdf/default-context
+      (igraph/add [[#'rdf/load-rdf
+                    :rdf-app/hasGraphDispatch JenaGraph
+                    ]
+                   [#'rdf/read-rdf
+                    :rdf-app/hasGraphDispatch JenaGraph
+                    ]
+                   [#'rdf/write-rdf
+                    :rdf-app/hasGraphDispatch JenaGraph
+                    ]
+                   ])))
+```
+
+### Special dispatch KWIs
+
+These keyword identifiers will be inferred automatically as dispatch
+values for to-load/to-read/to-write arguments:
+
+- `:rdf-app/LocalFile` for file in the local file system
+- `:rdf-app/FileResource` for a file bound to a URL such as a jar resource
+- `:rdf-app/WebResource` for a resource available through http. See
+  also the discussion of the resource catalog below.
+
+These can be overridden with e.g. `[#'rdf/load-rdf :rdf-app/toImportDisptachFn <[to-load]-> dispatch-value>]` (or `:rdf-app/toExportDispatchFn` for writes).
+
+
+### The resource catalog
+
+The @`resource-catalog` is a
+[native-normal](https://github.com/ont-app/igraph#Graph) graph containing
+desciptions of web resources that you may want to add or load,
+including their MIME types.
+
+This graph is automatically populated from details included in the
+[ont-app/vocabulary](https://github.com/ont-app/vocabulary#common-linked-data-namespaces)
+metadata.
+
+You can add entries to it with the `add-catalog-entry!` function.
+
+```
+> (add-catalog-entry! <download-url> <namespace-uri> <prefix> <media-type>)
+```
+
+The media types align with other data included in the `ont-app.rdf.ont` module.
+
+See the docstring for `add-catalog-entry` for details.
+
+### Input
+
+There are two methods for input, `load-rdf`, which translates a file
+or URL into a new graph, and `read-rdf` which adds a file or URL to an
+existing graph.
+
+#### load-rdf
+
+```
+> (rdf/load-rdf <context> <to-load>) -> g
+```
+
+It is dispatched by the function `load-rdf-dispatch` -> [graph-dispatch to-load-dispatch] 
+- `graph-dispatch` is typically the name of the record implementing
+  IGraph. It is specified by the triple `[#'load-rdf
+  :rdf-app/hasGraphDispatch <graph-dispatch>]` in the `context` graph.
+
+- `to-load-dispatch` will typically be one of the special dispatch KWIs
+  described in the section above, defaulting to the type of `to-load`
+  
+  
+#### read-rdf
+
+```
+> (rdf/read-rdf <context> <g> <to-load>) -> g
+```
+It is dispatched by the function `read-rdf-dispatch` -> [graph-dispatch to-load-dispatch] 
+- `graph-dispatch` is typically the name of the record implementing
+  IGraph. It is specified by the triple `[#'read-rdf
+  :rdf-app/hasGraphDispatch <graph-dispatch>]` in the `context` graph.
+
+- `to-load-dispatch` will typically be one of the special dispatch KWIs
+  described in the section above, defaulting to the type of `to-load`
+
+### Output
+
+There is one method to export data. It is also informed by the context
+graph, and dispatches in the same way as the input methods, but output
+formats are informed by KWIs mapped to values descibed in
+https://www.w3.org/ns/formats/ , and
+[derived](https://clojuredocs.org/clojure.core/derive) from
+`:dct/MediaTypeOrExtent`.
+
+#### write-rdf
+
+```
+> (rdf/write-rdf <context> <g> <target> <fmt>) 
+```
+
+This is dispatched on the function `write-rdf-dispatch` -> `[graph-dispatch to-write-dispatch fmt]`
+
+- `graph-dispatch` and `to-write-dispatch` are pretty much as above.
+- `fmt` passed through directly, and is typically one one of the
+  formot KWIs declared in `ont.cljc`, e.g. `:formats/Turtle` or
+  `:formats/JSON-LD`. Again, see https://www.w3.org/ns/formats/ .
+
+
+## Test support
+
+The `ont-app.rdf.test-support` module builds on the [igraph
+test-support](https://github.com/ont-app/igraph#testing-support)
+regime.
+
+This is probably best described by an example taken from the test
+module for
+[ont-app/igraph-jena](https://github.com/ont-app/igraph-vocabulary/blob/develop/test/ont_app/igraph_vocabulary/core_test.cljc):
+
+```
+(ns ont-app.igraph-jena.core-test
+  (:require
+    ...
+    [ont-app.igraph-jena.core :as core]
+    [ont-app.igraph.test-support :as test-support]
+    [ont-app.rdf.test-support :as rdf-test]
+    ...))
+    
+(def rdf-test-report (atom nil))
+
+(defn init-rdf-report
+  []
+  (let [call-write-method (fn call-write-method [g ttl-file]
+                            (rdf/write-rdf
+                             core/standard-io-context
+                             g
+                             ttl-file
+                             :formats/Turtle))
+        ]
+  (-> (native-normal/make-graph)
+      (add [:rdf-app/RDFImplementationReport
+            :rdf-app/makeGraphFn core/make-jena-graph
+            :rdf-app/loadFileFn core/load-rdf
+            :rdf-app/readFileFn core/read-rdf
+            :rdf-app/writeFileFn call-write-method
+            ]))))
+
+(defn do-rdf-implementation-tests
+  []
+  (reset! rdf-test-report (init-rdf-report))
+  (-> rdf-test-report
+      (rdf-test/test-bnode-support)
+      (rdf-test/test-load-of-web-resource)
+      (rdf-test/test-read-rdf-methods)
+      (rdf-test/test-write-rdf-methods)
+      (rdf-test/test-transit-support)))
+
+(deftest rdf-implementation-tests
+  (let [report (do-rdf-implementation-tests)]
+    (is (empty? (test-support/query-for-failures @report)))))
+```
+
+This logic will create an atom to contain a native-normal `report`
+graph, and after being intialized with implementation-specific details
+a battery of tests will be run, populating the graph with descriptions
+of those tests' outcomes. Bad outcomes are flagged as failures, which
+can be queried for in the report graph. Empty results for
+`query-for-failures` indicates a passing test.
 
 
 <a name="h2-debugging"></a>

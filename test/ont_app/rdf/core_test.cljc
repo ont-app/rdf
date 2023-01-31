@@ -6,8 +6,10 @@
    [clojure.java.io :as io]
    [clojure.spec.alpha :as spec]
    [clojure.string :as str]
+   [clj-http.client :as http]
    [ont-app.graph-log.core :as glog]
    [ont-app.igraph.core :as igraph :refer [unique]]
+   [ont-app.igraph.graph :as native-normal :refer [make-graph]]
    [ont-app.rdf.core :as rdf-app]
    [ont-app.rdf.test-support :as test-support]
    [ont-app.vocabulary.core :as voc]
@@ -134,7 +136,7 @@
     
     ))
 
-(deftest language-tagged-strings
+(deftest test-language-tagged-strings
   (testing "langstr dispatch"
     (let [x #?(:clj #voc/lstr "asdf@en"
                :cljs (read-string "#voc/lstr \"asdf@en\""))
@@ -147,7 +149,7 @@
              ))
       )))
 
-(deftest transit
+(deftest test-transit
   (testing "transit encoding/decoding"
     (let [v [1 2 3]
           s (set v)
@@ -206,7 +208,7 @@
 
 
 
-(deftest selmer-to-cljstache
+(deftest test-selmer-to-cljstache
   (testing "Using cljstache (instead of selmer) should work on clj(s)."
     (is (= (stache/render test-query-template
                           (merge @rdf-app/query-template-defaults
@@ -227,4 +229,21 @@
                                                  :rdf/also-just-kidding
                                                  }))})))))
 
- 
+
+(defn collect-ns-catalog-metadata [gacc prefix ns]
+  (let [m (voc/get-ns-meta ns)
+        download-url (:dcat/downloadURL m)
+        appendix (:voc/appendix m)
+        ]
+    (if (and download-url appendix)
+      (igraph/add gacc appendix)
+      gacc)))
+      
+  (add gacc [download-url :dcat/mediaType media-type]
+(comment
+  (def g
+    (->> (voc/prefix-to-ns)
+         (reduce-kv collect-ns-catalog-metadata (make-graph))))
+       
+  
+  }

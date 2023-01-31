@@ -16,6 +16,7 @@ It includes:
    [clojure.spec.alpha :as spec]
    [clojure.java.io :as io]
    ;; 3rd party
+   [clj-http.client :as http]
    [cljstache.core :as stache]
    [cognitect.transit :as transit]
    ;; ont-app
@@ -182,6 +183,31 @@ It includes:
 ;; INPUT/OUTPUT
 ;;;;;;;;;;;;;;;;;;
 
+(defn collect-ns-catalog-metadata
+  "Reducing function outputs `gacc'` given voc metadata assigned to namespace
+  - NOTE: typically used to initialize the resource catalog.
+  "
+  [gacc prefix ns]
+  (let [m (voc/get-ns-meta ns)
+        download-url (:dcat/downloadURL m)
+        appendix (:voc/appendix m)
+        ]
+    (if (and download-url appendix)
+      (igraph/add gacc appendix)
+      gacc)))
+
+(def resource-catalog
+  "A native normal graph using this vocabulary:
+  - [`download-url` :dcat/mediaType `media-type`]
+  - where
+    - `download-url` is a URL string
+    - `media-type` should be appropriate for an http call.
+  "
+  (atom (->> (voc/prefix-to-ns)
+             (reduce-kv collect-ns-catalog-metadata
+                        (native-normal/make-graph)))))
+                                   
+                          
 (def default-context
   "An atom containing a native-normal graph with default i/o context configurations.
   - NOTE: This would typically be the starting point for the i/o context of  individual

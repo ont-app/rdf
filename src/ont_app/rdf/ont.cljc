@@ -81,7 +81,8 @@ for this class."
   [:transit/json
    :rdf/type :igraph/SerializationFormat
    :transit/format :json
-   :igraph/mimeType "application/transit+json"
+   :formats/media_type "application/transit+json"
+   ;;:igraph/mimeType "application/transit+json"
    :rdfs/comment "Refers to transit data encoded as json. Literals whose 
   :datatype metadata is :transit/json should be readable with transit/read 
    encoded for format :json"
@@ -89,13 +90,68 @@ for this class."
   [:transit/msgpack
    :rdf/type :igraph/SerializationFormat
    :transit/format :msgpack
-   :igraph/mimeType "application/transit+msgpack"
+   :formats/media_type "application/transit+msgpack"
+   ;; :igraph/mimeType "application/transit+msgpack"
    :rdfs/comment "Refers to the Transit data encoded as msgpack. Literals whose 
   :datatype metadata is :transit/msgpack should be readable with transit/read 
    encoded for format :msgpack (not currently supported)"
    ]
   ])
 
+;; MIME types
+
+(voc/put-ns-meta!
+ 'ont-app.rdf.formats
+ {
+  :vann/preferredNamespacePrefix "formats"
+  :vann/preferredNamespaceUri "http://www.w3.org/ns/formats/"
+  :dc/description "File formats for various RDF data"
+  :foaf/homepage "https://www.w3.org/ns/formats/"
+  })
+
+(update-ontology! [:dct/MediaTypeOrExtent
+                   :rdfs/seeAlso (voc/keyword-for "https://www.w3.org/ns/formats/")
+                   ])
+
+
+
+(def formats
+     [[:formats/JSON-LD "application+json" ".jsonld"]
+      [:formats/N3 "text/rdf+n3" ".n3"]
+      [:formats/N-triples "application/n-triples" ".nt"]
+      [:formats/N-Quads "application/n-quads" ".nq"]
+      [:formats/LD_patch "text/ldpatch" ".ldp"]
+      [:formats/OWL_XML "application/owl+xml" ".owx"]
+      [:formats/OWL_Functional "text/owl-functional" ".ofn"]
+      [:formats/OWL_Manchester "text/owl-manchester" ".ofm"]
+      [:formats/POWDER "powder+xml" ".wdr"]
+      [:formats/POWDER-S "powder-s+xml" ".wdrs"]
+      [:formats/PROV-N "text/provenance-notation" ".provn"]
+      [:formats/PROV-XML "application/provenance+xml" ".provx"]
+      [:formats/RDF_JSON "applicaton/rdf+json" ".rj"]
+      [:formats/RDF_XML "application/rdf+xml" ".rdf"]
+      [:formats/RIF_XML "applicaton/rif+xml" ".rif" ] ;; rule interchange
+      [:formats/SPARQL_RESULTS_XML "application/sparql-results+xml" ".srx"]
+      [:formats/SPARQL_RESULTS_JSON "application/sparql-results+json" ".srj"]
+      [:formats/SPARQL_RESULTS_CSV "text/csv" ".csv"]
+      [:formats/SPARQL_RESULTS_TSV "text/tab-separated-values" ".tsv"]
+      [:formats/Turtle "text/turtle" ".ttl"]
+      [:formats/TriG "applicaton/trig" ".trig"]
+      ])
+
+(defn add-media-type
+  [kwi media-type suffix]
+  (update-ontology! [kwi
+                     :rdf/type :dct/MediaTypeOrExtent
+                     :formats/media_type media-type
+                     :formats/preferred_suffix suffix
+                     ]))
+
+(doseq [[k m s] formats]
+  (add-media-type k m s))
+  
+
+         
 ;; TEST SUPPORT
 (update-ontology!
  [[:rdf-app/RDFImplementationReport

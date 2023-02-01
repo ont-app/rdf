@@ -193,6 +193,7 @@ It includes:
         appendix (:voc/appendix m)
         ]
     (if (and download-url appendix)
+      ;; appendix is one or more triples
       (igraph/add gacc appendix)
       gacc)))
 
@@ -206,7 +207,7 @@ It includes:
   (atom (->> (voc/prefix-to-ns)
              (reduce-kv collect-ns-catalog-metadata
                         (native-normal/make-graph)))))
-                                   
+
                           
 (def default-context
   "An atom containing a native-normal graph with default i/o context configurations.
@@ -227,7 +228,7 @@ It includes:
     - `dispatch-key` :~ #{:rdf-app/LocalFile, :rdf-app/FileResource :rdf/WebResource}
       or the type of `to-import`.
     - :rdf-app/LocalFile indicates that `to-import` is a local path string
-    - :rdf-app/FileResource indicates that `to-import` is a resource in a JAR
+    - :rdf-app/FileResource indicates that `to-import` is a file resource (maybe from a jar)
     - :rdf-app/WebResource indicates something accessible through a curl call.
   "
   [to-import]
@@ -305,6 +306,38 @@ It includes:
   (str dir  "/" stem "_hash=" (hash url) "." ext))
 
 
+(defn catalog-lookup
+  [url]
+  (let [g (igraph/union @resource-catalog
+                        ontology)
+        ]
+    (-> (igraph/query g
+                      [[(str url) :dcat/mediaType :?media-type]
+                       [:?media-url  :formats/media_type :?media-type]
+                       [:?media-url :formats/preferred_suffix :?suffix]])
+        (unique))))
+
+(defn lookup-file-specs-in-catalog
+  [url]
+  (if-let [lookup (catalog-lookup url)
+           ]
+        {:url (str url)
+         :path (.getPath url)
+         :stem (str (hash url))
+         :ext (clojure.string/replace (:?suffix lookup) #"\." "")
+         }))
+
+  
+(defn http-get-from-catalog
+  [url]
+  (let [lookup (catalog-lookup url)
+        ]
+    (when lookup
+      (http/get (str url)
+                {:accept (:?media-type lookup)})
+      )))
+
+
 (defn parse-url
   [url]
   (let [path (.getPath url)
@@ -349,7 +382,8 @@ It includes:
         ;; else there is no pathFn, try to parse the URL...
         (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
               ]
-          (assoc (parse-url url)
+          (assoc (or (lookup-file-specs-in-catalog url)
+                     (parse-url url))
                  :dir dir)))))
 
 (defn import-url-via-temp-file

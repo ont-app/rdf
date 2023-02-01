@@ -230,20 +230,29 @@
                                                  }))})))))
 
 
-(defn collect-ns-catalog-metadata [gacc prefix ns]
-  (let [m (voc/get-ns-meta ns)
-        download-url (:dcat/downloadURL m)
-        appendix (:voc/appendix m)
-        ]
-    (if (and download-url appendix)
-      (igraph/add gacc appendix)
-      gacc)))
-      
-  (add gacc [download-url :dcat/mediaType media-type]
+
+
 (comment
   (def g
     (->> (voc/prefix-to-ns)
          (reduce-kv collect-ns-catalog-metadata (make-graph))))
-       
-  
-  }
+  (def dc-url "http://purl.org/dc/elements/1.1/")
+  (def m-type  (unique (igraph/get-o @rdf-app/resource-catalog dc-url :dcat/mediaType)))
+  (def ext (let [
+                 ]
+             (-> (igraph/query rdf-app/ontology
+                               [[:?media-url :formats/media_type m-type]
+                                [:?media-url :formats/preferred_suffix :?suffix]])
+                 (unique)
+                 (:?suffix)
+                 )))
+  (def dc-file (http/get dc-url {:accept m-type}))
+  (spit (format "/tmp/test%s" ext) (:body dc-file))
+
+  (def u (igraph/union @rdf-app/resource-catalog
+                       rdf-app/ontology))
+  (igraph/query u
+                [[dc-url :dcat/mediaType :?media-type]
+                 [:?media-url :formats/media_type :?media-type]
+                 [:?media-url :formats/preferred_suffix :?suffix]])
+  )

@@ -189,26 +189,52 @@ It includes:
   "
   [gacc prefix ns]
   (let [m (voc/get-ns-meta ns)
+        uri (:vann/preferredNamespaceUri m)
+        prefix (:vann/preferredNamespacePrefix m)
         download-url (:dcat/downloadURL m)
         appendix (:voc/appendix m)
         ]
     (if (and download-url appendix)
       ;; appendix is one or more triples
-      (igraph/add gacc appendix)
+      (-> gacc
+          (igraph/add [uri
+                       :dcat/downloadURL download-url
+                       :vann/preferredNamespacePrefix prefix
+                       ])
+          (igraph/add appendix))
       gacc)))
 
 (def resource-catalog
   "A native normal graph using this vocabulary:
+  - [`namespace-uri` :dcat/downloadURL `down-load-url`]
+  - [`namespace-uri` :vann/preferredNamespacePrefix `prefix`]
   - [`download-url` :dcat/mediaType `media-type`]
   - where
     - `download-url` is a URL string
-    - `media-type` should be appropriate for an http call.
+    - `media-type` should be appropriate 'accept' for an http call.
   "
   (atom (->> (voc/prefix-to-ns)
              (reduce-kv collect-ns-catalog-metadata
                         (native-normal/make-graph)))))
 
-                          
+(defn add-catalog-entry!
+  "Adds an entry in @resource-catalog for `download-url` `namespace-uri` `prefix` `media-type`
+  - Where
+    - `download-url` is a URL (or string) naming a place on the web containing an RDF file
+    - `namespace-uri` is the primary URI, associated with `prefix`
+    - `prefix` is the preferred prefix for `namespace-uri`
+    - `media-type` is the MIME type, of `download-url` eg 'text/turtle'
+  "
+  [download-url namespace-uri prefix media-type]
+  (swap! resource-catalog
+         igraph/add
+         [[(str namespace-uri)
+           :vann/preferredNamespacePrefix prefix
+           :dcat/downloadURL (str download-url)]
+          [(str download-url)
+           :dcat/mediaType media-type
+           ]]))
+
 (def default-context
   "An atom containing a native-normal graph with default i/o context configurations.
   - NOTE: This would typically be the starting point for the i/o context of  individual
@@ -314,7 +340,10 @@ It includes:
     (-> (igraph/query g
                       [[(str url) :dcat/mediaType :?media-type]
                        [:?media-url  :formats/media_type :?media-type]
-                       [:?media-url :formats/preferred_suffix :?suffix]])
+                       [:?media-url :formats/preferred_suffix :?suffix]
+                       [:?namespace-uri :dcat/downloadURL (str url)]
+                       [:?namespace-uri :vann/preferredNamespacePrefix :?prefix]
+                       ])
         (unique))))
 
 (defn lookup-file-specs-in-catalog
@@ -323,7 +352,7 @@ It includes:
            ]
         {:url (str url)
          :path (.getPath url)
-         :stem (str (hash url))
+         :stem (:?prefix lookup)
          :ext (clojure.string/replace (:?suffix lookup) #"\." "")
          }))
 
@@ -386,65 +415,73 @@ It includes:
                      (parse-url url))
                  :dir dir)))))
 
-(defn import-url-via-temp-file
-  "RETURNS `g`, with contents of `url` loaded
-  SIDE-EFFECT: creates file named `cached-file-path` if it does not already exist.
+(defn cache-url-as-local-file
+  "RETURNS `cached-file`, with contents of `url` loaded
+  SIDE-EFFECT: creates file named `cached-file` if it does not already exist.
   - Where
     - `context` is a native-normal graph informed by vocabulary below.
-    - `import-fn` := fn [context cached-file-path] -> g,
     - `url` := a URL or string naming URL
     - `cached-file-path` names a local file to contain contents from `url`
   - VOCABULARY (for `context`)
     - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
       - optional. Default will try to parse `parse-map` from `url` itself
     - [:rdf-app/UrlCache :rdf-app/directory `cache-directory`]
-    - [:rdf-app/UrlCache :rdf-app/cacheMaintenance `rdf-app/DeleteOnRead`]
-      - optional. Will delete the cached file on successful read when specified
     - `cached-file-path-fn` := fn (uri) -> `parse-map`
     - `parse-map` := m s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
   "
-  [context import-fn url]
+  [context url]
   (if-let [temp-file-path (some-> (get-cached-file-path-spec context url)
                                   (cached-file-path))
            ]
-    (let [read-successful? (atom false)
+    (let [cached-file (io/file temp-file-path)
           ]
-      (when (not (.exists (io/file temp-file-path)))
-        (io/make-parents temp-file-path)
-        (spit temp-file-path
-              (slurp url)))
-      (try (let [g (import-fn context temp-file-path)
-                 ]
-             (reset! read-successful? true)
-           g)
-         (catch #?(:clj Throwable :cljs js/Error) e
-           (throw (ex-info "Error importing from URL"
-                           (merge (ex-data e)
-                                  {:type ::ErrorImportingFromURL
-                                   :context context
-                                   :url (str url)
-                                   :temp-file-path temp-file-path
-                                   }))))
-         (finally (when (and
-                         @read-successful?
-                         (context :rdf-app/UrlCache
-                                  :rdf-app/cacheMaintenance :rdf-app/DeleteOnRead))
-                    (io/delete-file temp-file-path)))))
-    ;; else no temp-file-path could be inferred
+      (when (not (and (.exists cached-file)
+                      (> (.length cached-file) 0)))
+        (io/make-parents cached-file)
+        (spit cached-file
+              (cond
+                (context url :rdf/type :rdf-app/FileResource)
+                (slurp url)
+
+                (context url :rdf/type :rdf-app/WebResource)
+                (-> (http-get-from-catalog url)
+                    :body)
+
+                :else
+                (throw (ex-info "Resource not sufficiently specified in context"
+                                {:type ::ResourceNotSufficientlySpecifiedInContext
+                                 ::context context
+                                 ::url url
+                                 })))))
+                
+      cached-file)
+    ;; else no cached-file-path
     (throw (ex-info (str "No caching path could be inferred for %s" url)
                     {:type ::NOCachingPathCouldBeInferredForURL
                      ::context context
                      ::url url
-                     }))
-    ))
+                     }))))
 
 
-(defmethod load-rdf [:rdf-app/IGraph java.net.URL]
+(defmethod load-rdf [:rdf-app/IGraph :rdf-app/FileResource]
   ;; default behavior to load URLs.
   ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
-  [context to-load]
-  (import-url-via-temp-file context load-rdf to-load))
-  
+  [context url]
+  (->> (cache-url-as-local-file (igraph/add context
+                                            [url :rdf/type :rdf-app/FileResource])
+                                url)
+       (load-rdf context)))
+
+(defmethod load-rdf [:rdf-app/IGraph :rdf-app/WebResource]
+  ;; default behavior to load URLs.
+  ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
+  [context url]
+  (->> (cache-url-as-local-file (igraph/add context
+                                            [url :rdf/type :rdf-app/WebResource])
+                                url)
+       (load-rdf context)))
+
+
 (defmethod load-rdf :default
   [context file-id]
   (throw (ex-info "No method for rdf/load-rdf"
@@ -497,15 +534,22 @@ It includes:
      (standard-import-dispatch to-read))
    ])
 
-(defmethod read-rdf [:rdf-app/IGraph java.net.URL]
-  ;; default behavior to load URLs.
-  ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
+(defmethod read-rdf [:rdf-app/IGraph :rdf-app/FileResource]
   [context g url]
-  (let [do-read-rdf (fn [context url]
-                      (read-rdf context g url))
-        ]
-  (import-url-via-temp-file context do-read-rdf url)))
-  
+  (->> (cache-url-as-local-file (igraph/add context
+                                            [url :rdf/type :rdf-app/FileResource])
+                                url)
+       (read-rdf g context)))
+
+(defmethod read-rdf [:rdf-app/IGraph :rdf-app/WebResource]
+  [context g url]
+  (->> (cache-url-as-local-file (igraph/add context
+                                            [url :rdf/type :rdf-app/WebResource])
+                                url)
+       (read-rdf g context)))
+
+
+
 (defmethod read-rdf :default
   [context file-id]
   (throw (ex-info "No method for rdf/read-rdf"

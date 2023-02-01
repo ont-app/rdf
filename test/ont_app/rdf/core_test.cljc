@@ -32,11 +32,10 @@
                     "."))
     temp))
 
-(def dulce-web-resource
-  "No-fuss GET-able OWL file on the web"
-  (java.net.URL. "http://www.ontologydesignpatterns.org/ont/dul/DUL.owl"))
 
-
+(def rdfs-web-resource
+  "The URL for the rdfs schema, which has an entry in the resource catalog, drawn from voc metadata. "
+  (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
 
 (deftest test-specs
   (let [java-resource (io/resource "test_support/bnode-test.ttl")
@@ -79,9 +78,9 @@
            (rdf-app/read-rdf-dispatch context nil test-support/bnode-test-data)))
 
     (is (= [::TestGraphDispatch :rdf-app/WebResource]
-           (rdf-app/load-rdf-dispatch context dulce-web-resource)))
+           (rdf-app/load-rdf-dispatch context rdfs-web-resource)))
     (is (= [::TestGraphDispatch :rdf-app/WebResource]
-           (rdf-app/read-rdf-dispatch context nil dulce-web-resource)))
+           (rdf-app/read-rdf-dispatch context nil rdfs-web-resource)))
 
     ;; otherwise return the type of to-import
     (is (= [::TestGraphDispatch ont_app.igraph.graph.Graph]
@@ -108,32 +107,54 @@
       )
     ))
 
-(deftest test-dummy-imports
-  (let [context @rdf-app/default-context
-        import-fn-state (atom nil)
-        cache-dir (io/file (unique (context :rdf-app/UrlCache :rdf-app/directory)))
-        dummy-import (fn [_ temp-file-path]
-                       (reset! import-fn-state
-                               {:temp-file-path temp-file-path
-                                }))
+(deftest test-cache-url-as-local-file
+  "URLs should be copied to locally cached, appropriately named local files"
+  (let [cache-dir (io/file (unique (@rdf-app/default-context
+                                    :rdf-app/UrlCache :rdf-app/directory)))
         ]
 
+    ;; File resource (like from a jar)
     (let [url test-support/bnode-test-data
+          path (rdf-app/cache-url-as-local-file
+                (-> @rdf-app/default-context
+                    (igraph/add [url :rdf/type :rdf-app/FileResource]))
+                url)
           ]
-      (rdf-app/import-url-via-temp-file context dummy-import url)
+      (is (= cache-dir (.getParentFile path)))
+      
+      (is (re-find #"bnode-test" (str path)))
+      (is (> (.length path) 0))
+      )
 
-      (is (= cache-dir
-             (.getParentFile (io/file (:temp-file-path @import-fn-state)))))
-      (is (re-find #"bnode-test"
-                   (:temp-file-path @import-fn-state))))
-
-    (let [url dulce-web-resource
+    ;; Web resource
+    (let [url rdfs-web-resource
+          path (rdf-app/cache-url-as-local-file
+                (-> @rdf-app/default-context
+                    (igraph/add [url :rdf/type :rdf-app/WebResource]))
+                url)
           ]
-      (rdf-app/import-url-via-temp-file context dummy-import url)
-      (is (= cache-dir (.getParentFile (io/file (:temp-file-path @import-fn-state)))))
-      (is (re-find #"DUL"
-                   (:temp-file-path @import-fn-state))))
-    
+      (is (= cache-dir (.getParentFile path)))
+      (is (re-find #"rdfs" (str path)))
+      (is (> (.length path) 0))
+      )
+
+    ;; adding an entry to the resource catalog
+    (let [url (java.net.URL. "http://www.ontologydesignpatterns.org/ont/dul/DUL.owl")
+          ]
+      (rdf-app/add-catalog-entry! url
+                                  "http://ontologydesignpatterns.org/ont/dulce.owl"
+                                  "dulce"
+                                  "application/owl+xml"
+                                  )
+      (let [path (rdf-app/cache-url-as-local-file
+                                  (-> @rdf-app/default-context
+                    (igraph/add [url :rdf/type :rdf-app/WebResource]))
+                                  url)
+            ]
+        (is (= cache-dir (.getParentFile path)))
+        (is (re-find #"dulce" (str path)))
+        (is (> (.length path) 0))
+        ))
     ))
 
 (deftest test-language-tagged-strings
@@ -236,7 +257,7 @@
   (def g
     (->> (voc/prefix-to-ns)
          (reduce-kv collect-ns-catalog-metadata (make-graph))))
-  (def dc-url "http://purl.org/dc/elements/1.1/")
+  (def dc-url (java.net.URL. "http://purl.org/dc/elements/1.1/"))
   (def m-type  (unique (igraph/get-o @rdf-app/resource-catalog dc-url :dcat/mediaType)))
   (def ext (let [
                  ]
@@ -255,4 +276,10 @@
                 [[dc-url :dcat/mediaType :?media-type]
                  [:?media-url :formats/media_type :?media-type]
                  [:?media-url :formats/preferred_suffix :?suffix]])
+  
+  (rdf-app/cache-url-as-local-file (igraph/add @rdf-app/default-context
+                                               [rdfs-web-resource
+                                                :rdf/type :rdf-app/WebResource])
+                                   rdfs-web-resource)
+  
   )

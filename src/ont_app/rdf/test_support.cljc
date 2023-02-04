@@ -31,11 +31,11 @@
 (def bnode-test-data (io/resource "test_support/bnode-test.ttl"))
 
 (defn prepare-report
-  [make-graph-fn read-file-fn]
+  [make-graph-fn load-file-fn]
   (-> (native-normal/make-graph)
       (add [:rdf-app/RDFImplementationReport
             :rdf-app/makeGraphFn make-graph-fn
-            :rdf-app/readFileFn read-file-fn
+            :rdf-app/loadFileFn load-file-fn
             ])))
 
 
@@ -56,12 +56,12 @@ Where
    Returns: modified `report`
   - Where
     - `report` is an atom containing a native-normal graph
-    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/readFileFn}
-    - `readFileFn` links to fn[file-name] -> RDF IGraph implementation
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/loadFileFn}
+    - `loadFileFn` links to fn[file-name] -> RDF IGraph implementation
   "
   [report]
-  (let [read-rdf-file (unique (@report :rdf-app/RDFImplementationReport :rdf-app/readFileFn))
-        bnode-graph (read-rdf-file bnode-test-data)
+  (let [load-rdf-file (unique (@report :rdf-app/RDFImplementationReport :rdf-app/loadFileFn))
+        bnode-graph (load-rdf-file bnode-test-data)
         assert-and-report! (partial igts/do-assert-and-report! report #'test-bnode-support)
         ]
     (assert-and-report!
@@ -105,6 +105,23 @@ Where
     report
     ))
 
+(defn test-load-of-web-resource
+  [report]
+  (let [load-rdf-file (unique (@report :rdf-app/RDFImplementationReport
+                               :rdf-app/loadFileFn))
+        rdfs-graph (load-rdf-file (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
+        assert-and-report! (partial igts/do-assert-and-report! report #'test-load-of-web-resource)
+        ]
+      (assert-and-report!
+       :rdf-app/RdfsSubjectsShouldNotBeEmpty
+       "Loading a URL for a web resource"
+       (let [subjects (igraph/subjects rdfs-graph)
+             ]
+         (empty? subjects))
+       false))
+  report)
+
+
 (def transit-test-map
   "A map containing clojure constructs serializable under transit"
   {:sub-map {:a "this is a string"}
@@ -119,16 +136,16 @@ Where
    Returns: modified `report`
   - Where
     - `report` is an atom containing a native-normal graph
-    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/makeGraphFn, :rdf-app/readFileFn, :rdf-app/writeFileFn}
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/makeGraphFn, :rdf-app/loadFileFn, :rdf-app/writeFileFn}
     - `makeGraphFn` links to fn[] -> empty RDF IGraph implemenation
-    - `readFileFn` links to fn[file-name] -> RDF IGraph implementation
+    - `loadFileFn` links to fn[file-name] -> RDF IGraph implementation
     - `writeFileFn` links to fn[graph file-name] -> ?, with side-effects that contents
-         of `graph` are written to a file readable by `readFileFn`.
+         of `graph` are written to a file readable by `loadFileFn`.
   "
   
   [report]
   (let [make-graph (unique (@report :rdf-app/RDFImplementationReport :rdf-app/makeGraphFn))
-        read-rdf-file  (unique (@report :rdf-app/RDFImplementationReport :rdf-app/readFileFn))
+        load-rdf-file  (unique (@report :rdf-app/RDFImplementationReport :rdf-app/loadFileFn))
         write-rdf-file (unique (@report :rdf-app/RDFImplementationReport :rdf-app/writeFileFn))
         assert-and-report! (partial igts/do-assert-and-report!
                                     report
@@ -143,7 +160,7 @@ Where
        (igraph/add! g  [:rdf-app/TransitTestMap
                         :rdf-app/hasMap transit-test-map])
        (write-rdf-file g temp-file)
-       (let [g' (read-rdf-file temp-file)]
+       (let [g' (load-rdf-file temp-file)]
          (= (unique (g' :rdf-app/TransitTestMap
                         :rdf-app/hasMap))
             transit-test-map)))

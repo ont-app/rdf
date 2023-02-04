@@ -20,6 +20,16 @@
             :refer-macros [warn debug trace value-trace value-debug]])
    ))
 
+(glog/log-reset!)
+(glog/set-level! :glog/LogGraph :glog/OFF)
+
+(defn log-reset!
+  ([]
+   (log-reset! :glog/DEBUG))
+  ([level]
+   (glog/log-reset!)
+   (glog/set-level! level)))
+
 (def core-test-ttl
   "A local ttl file containing a single triple."
   (let [temp (java.io.File/createTempFile "rdf-core-test" ".ttl")
@@ -52,41 +62,42 @@
     ))
 
 
-(deftest test-io-dispatch
-  (let [context (-> @rdf-app/default-context
-                    (igraph/add [[#'rdf-app/load-rdf
-                                  :rdf-app/hasGraphDispatch ::TestGraphDispatch]
-                                 [#'rdf-app/read-rdf
-                                  :rdf-app/hasGraphDispatch ::TestGraphDispatch]
-                                 ]))
-        ]
+(derive ::TestGraphIO :rdf-app/IGraph)
 
+(def test-context (-> @rdf-app/default-context
+                    (igraph/add [[#'rdf-app/load-rdf
+                                  :rdf-app/hasGraphDispatch ::TestGraphIO]
+                                 [#'rdf-app/read-rdf
+                                  :rdf-app/hasGraphDispatch ::TestGraphIO]
+                                 ])))
+(deftest test-io-dispatch 
+  (let [context test-context]
     ;; recognized classes of input...
-    (is (= [::TestGraphDispatch :rdf-app/LocalFile]
+    (is (= [::TestGraphIO :rdf-app/LocalFile]
            (rdf-app/load-rdf-dispatch context (str core-test-ttl))))
-    (is (= [::TestGraphDispatch :rdf-app/LocalFile]
+    (is (= [::TestGraphIO :rdf-app/LocalFile]
            (rdf-app/read-rdf-dispatch context nil (str core-test-ttl))))
 
-    (is (= [::TestGraphDispatch :rdf-app/LocalFile]
+    (is (= [::TestGraphIO :rdf-app/LocalFile]
            (rdf-app/load-rdf-dispatch context core-test-ttl)))
-    (is (= [::TestGraphDispatch :rdf-app/LocalFile]
+    (is (= [::TestGraphIO :rdf-app/LocalFile]
            (rdf-app/read-rdf-dispatch context nil core-test-ttl)))
 
-    (is (= [::TestGraphDispatch :rdf-app/FileResource]
+    (is (= [::TestGraphIO :rdf-app/FileResource]
            (rdf-app/load-rdf-dispatch context test-support/bnode-test-data)))
-    (is (= [::TestGraphDispatch :rdf-app/FileResource]
+    (is (= [::TestGraphIO :rdf-app/FileResource]
            (rdf-app/read-rdf-dispatch context nil test-support/bnode-test-data)))
 
-    (is (= [::TestGraphDispatch :rdf-app/WebResource]
+    (is (= [::TestGraphIO :rdf-app/WebResource]
            (rdf-app/load-rdf-dispatch context rdfs-web-resource)))
-    (is (= [::TestGraphDispatch :rdf-app/WebResource]
+    (is (= [::TestGraphIO :rdf-app/WebResource]
            (rdf-app/read-rdf-dispatch context nil rdfs-web-resource)))
 
     ;; otherwise return the type of to-import
-    (is (= [::TestGraphDispatch ont_app.igraph.graph.Graph]
+    (is (= [::TestGraphIO ont_app.igraph.graph.Graph]
            (rdf-app/load-rdf-dispatch context context)))
     
-    (is (= [::TestGraphDispatch ont_app.igraph.graph.Graph]
+    (is (= [::TestGraphIO ont_app.igraph.graph.Graph]
            (rdf-app/read-rdf-dispatch context nil context)))
     
     ;; to-import Dispatch provided in the context...
@@ -99,13 +110,14 @@
                       :rdf-app/toImportDispatchFn (fn [to-read] ::TestImportDispatch)
                       ]])
           ]
-      (is (= [::TestGraphDispatch ::TestImportDispatch]
+      (is (= [::TestGraphIO ::TestImportDispatch]
            (rdf-app/load-rdf-dispatch context' nil)))
       
-      (is (= [::TestGraphDispatch ::TestImportDispatch]
+      (is (= [::TestGraphIO ::TestImportDispatch]
              (rdf-app/read-rdf-dispatch context' nil nil)))
       )
     ))
+
 
 (deftest test-cache-url-as-local-file
   "URLs should be copied to locally cached, appropriately named local files"
@@ -156,6 +168,29 @@
         (is (> (.length path) 0))
         ))
     ))
+
+(deftest test-load-rdf
+  "Loading URLs should flag an error after it's been translated to a local file. Loading local files is the responsibility of individual applications.
+"
+  (testing "file resource"
+    (try (rdf-app/load-rdf test-context test-support/bnode-test-data)
+         (catch clojure.lang.ExceptionInfo e
+           (let [ed (ex-data e)
+                 ]
+             (is (= ::rdf-app/NoMethodForLoadRdf (:type ed) ))
+             (is (re-matches #".*bnode-test_hash=.*.ttl" (str (::rdf-app/file ed))))
+             (is (= [::TestGraphIO :rdf-app/LocalFile] (::rdf-app/dispatch ed)))
+             ))))
+  (testing "web resource"
+    (try (rdf-app/load-rdf test-context rdfs-web-resource)
+         (catch clojure.lang.ExceptionInfo e
+           (let [ed (ex-data e)
+                 ]
+             (is (= ::rdf-app/NoMethodForLoadRdf (:type ed) ))
+             (is (re-matches #".*rdfs_hash=.*.ttl" (str (::rdf-app/file ed))))
+             (is (= [::TestGraphIO :rdf-app/LocalFile] (::rdf-app/dispatch ed)))
+             ))))
+  )
 
 (deftest test-language-tagged-strings
   (testing "langstr dispatch"
@@ -227,8 +262,6 @@
   }
   ")
 
-
-
 (deftest test-selmer-to-cljstache
   (testing "Using cljstache (instead of selmer) should work on clj(s)."
     (is (= (stache/render test-query-template
@@ -254,9 +287,12 @@
 
 
 (comment
+  (require '[clojure.pprint :refer [pprint]])
+  (require '[clojure.reflect :refer [reflect]])
+  (require '[clojure.repl :refer [apropos]])
   (def g
     (->> (voc/prefix-to-ns)
-         (reduce-kv collect-ns-catalog-metadata (make-graph))))
+         (reduce-kv rdf-app/collect-ns-catalog-metadata (make-graph))))
   (def dc-url (java.net.URL. "http://purl.org/dc/elements/1.1/"))
   (def m-type  (unique (igraph/get-o @rdf-app/resource-catalog dc-url :dcat/mediaType)))
   (def ext (let [
@@ -267,19 +303,10 @@
                  (unique)
                  (:?suffix)
                  )))
-  (def dc-file (http/get dc-url {:accept m-type}))
-  (spit (format "/tmp/test%s" ext) (:body dc-file))
-
-  (def u (igraph/union @rdf-app/resource-catalog
-                       rdf-app/ontology))
-  (igraph/query u
-                [[dc-url :dcat/mediaType :?media-type]
-                 [:?media-url :formats/media_type :?media-type]
-                 [:?media-url :formats/preferred_suffix :?suffix]])
   
   (rdf-app/cache-url-as-local-file (igraph/add @rdf-app/default-context
                                                [rdfs-web-resource
                                                 :rdf/type :rdf-app/WebResource])
                                    rdfs-web-resource)
-  
+   
   )

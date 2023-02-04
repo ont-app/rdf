@@ -179,9 +179,43 @@ It includes:
 
 
 
+
 ;;;;;;;;;;;;;;;;;;
 ;; INPUT/OUTPUT
 ;;;;;;;;;;;;;;;;;;
+
+;; KWI/URI conversion for catalog contents
+(defn coerce-graph-element
+  "Returns `x`, possibly coerced to either a kwi or a java.net.URI per `policy`
+  - where
+    - `policy` := m s.t. (keys m) :- #{::kwi-if ::uri-if}
+    - `x` is any candidate as an element in an IGraph
+    - `kwi-if` := fn [x] -> truthy if `x` should be translated to a keyword id
+    - `uri-if` := fn [x] -> truthy if `x` should be translated to a java.net.URI
+  - NOTE: Some implementations of IGraph may be a lot more tolarant of datatypes
+    in s/p/o position than the URI/URI/URI-or-literal that  RDF expects.
+  "
+  ([x]
+   (coerce-graph-element {::kwi-if (fn [x] (re-matches (voc/namespace-re) (str x)))
+                          ::uri-if (fn [x] (or
+                                            (re-matches voc/ordinary-iri-str-re  (str x))
+                                            (re-matches voc/exceptional-iri-str-re (str x))))
+                          }
+                         x))
+  ([policy x]
+   (cond
+     ((::kwi-if policy) x)
+     (if (keyword? x)
+       x
+       (voc/keyword-for (str x)))
+
+     ((::uri-if policy) x)
+     (if (instance? java.net.URI x)
+       x
+       (java.net.URI. (str x)))
+
+     :else x
+     )))
 
 (defn collect-ns-catalog-metadata
   "Reducing function outputs `gacc'` given voc metadata assigned to namespace
@@ -195,13 +229,14 @@ It includes:
         appendix (:voc/appendix m)
         ]
     (if (and download-url appendix)
-      ;; appendix is one or more triples
+      ;; appendix is one or more triples expressed as vectors
       (-> gacc
-          (igraph/add [uri
-                       :dcat/downloadURL download-url
+          (igraph/add [(coerce-graph-element uri)
+                       :dcat/downloadURL (coerce-graph-element download-url)
                        :vann/preferredNamespacePrefix prefix
                        ])
-          (igraph/add appendix))
+          (igraph/add (mapv (fn [v] (mapv coerce-graph-element v))
+                            appendix)))
       gacc)))
 
 (def resource-catalog
@@ -228,10 +263,10 @@ It includes:
   [download-url namespace-uri prefix media-type]
   (swap! resource-catalog
          igraph/add
-         [[(str namespace-uri)
+         [[(coerce-graph-element namespace-uri)
            :vann/preferredNamespacePrefix prefix
-           :dcat/downloadURL (str download-url)]
-          [(str download-url)
+           :dcat/downloadURL (coerce-graph-element download-url)]
+          [(coerce-graph-element download-url)
            :dcat/mediaType media-type
            ]]))
 
@@ -313,14 +348,19 @@ It includes:
   {:pre [(fn [context _] (context #'load-rdf :rdf-app/hasGraphDispatch))
          ]
    }
-  ;; return [graph-dispatch, to-load-dispatch] ...
-  [(unique (context #'load-rdf :rdf-app/hasGraphDispatch))
-   ,
-   (if-let [to-load-dispatch (unique (context #'load-rdf  :rdf-app/toImportDispatchFn))]
-     (to-load-dispatch to-load)
-     ;; else no despatch function was provided
-     (standard-import-dispatch to-load))
-   ])
+  (value-trace
+   ::load-rdf-dispatch
+   [::context context
+    ::to-load to-load
+    ]
+   ;; return [graph-dispatch, to-load-dispatch] ...
+   [(unique (context #'load-rdf :rdf-app/hasGraphDispatch))
+    ,
+    (if-let [to-load-dispatch (unique (context #'load-rdf  :rdf-app/toImportDispatchFn))]
+      (to-load-dispatch to-load)
+      ;; else no despatch function was provided
+      (standard-import-dispatch to-load))
+    ]))
    
 
 ;; URL caching
@@ -333,20 +373,37 @@ It includes:
 
 
 (defn catalog-lookup
+  "Returns `catalog-entry` for `url`
+  - Where
+    - `catalog-entry` := m s.t. (keys m) :~ #{?media-type :?prefix :?suffix :?media-url}
+    - `url` is a URL that may be in the resource catalog
+    - `:?prefix` is the preferred prefix associated with `url` (which informs the stem)
+    - `:?suffix` is the suffix associated with the `:?media-url` (informs the extension)
+  "
   [url]
   (let [g (igraph/union @resource-catalog
                         ontology)
+        url (coerce-graph-element url)
         ]
     (-> (igraph/query g
-                      [[(str url) :dcat/mediaType :?media-type]
+                      [[url :dcat/mediaType :?media-type]
                        [:?media-url  :formats/media_type :?media-type]
                        [:?media-url :formats/preferred_suffix :?suffix]
-                       [:?namespace-uri :dcat/downloadURL (str url)]
+                       [:?namespace-uri :dcat/downloadURL url]
                        [:?namespace-uri :vann/preferredNamespacePrefix :?prefix]
                        ])
         (unique))))
 
 (defn lookup-file-specs-in-catalog
+  "Returns `file-specs` for `url`
+  - Where
+    - `file-specs` := m s.t. (keys m) :~ #{:url :path :stem :ext}
+    - `url` (as arg) is a URL we may want to get from an http call
+    - `url` (as key) is the string version of `url`
+    - `path` is the file path of `url`
+    - `stem` is the preferred prefix for `url` in the catalog
+    - `ext` is the file suffix associated with the media type of `url` in the catalog
+  "
   [url]
   (if-let [lookup (catalog-lookup url)
            ]
@@ -358,6 +415,10 @@ It includes:
 
   
 (defn http-get-from-catalog
+  "returns an http response to a GET request for `url`
+  - Where
+    - `url` is a URL with an entry in the @`resource-catalog`
+  "
   [url]
   (let [lookup (catalog-lookup url)
         ]
@@ -366,24 +427,29 @@ It includes:
                 {:accept (:?media-type lookup)})
       )))
 
+(def parse-url-re
+  "A regex to parse a file URL string with a file name and an extension."
+  (re-pattern
+   (str "^.*/" ;; start with anything ending in slash
+        "([^/]+)" ;; at least one non-slash (group 1)
+        "\\." ;; dot
+        "(.*)$" ;; any ending, (group 2)
+        )))
 
 (defn parse-url
+  "Returns a file specification parsed directly from a URL (not in the catalog), or nil
+  - where
+    - `url` is a URL, probably a file resource"
   [url]
   (let [path (.getPath url)
-        stem-extension (re-pattern
-                        (str "^.*/" ;; start with anything ending in slash
-                             "([^/]+)" ;; at least one non-slash (group 1)
-                             "\\." ;; dot
-                             "(.*)$" ;; any ending, (group 2)
-                             ))
-        matches (re-matches stem-extension path)
-    ]
-  (if-let [[_ stem ext] matches]
-    {:url (str url)
-     :path path
-     :stem stem
-     :ext ext
-     })))
+        matches (re-matches parse-url-re path)
+        ]
+    (if-let [[_ stem ext] matches]
+      {:url (str url)
+       :path path
+       :stem stem
+       :ext ext
+       })))
 
 (defn get-cached-file-path-spec
   "Returns `m` s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
@@ -405,15 +471,20 @@ It includes:
   "
   [context url]
 
-  (or (if-let [cached-file-path-fn (unique (context :rdf-app/UrlCache :rdf-app/pathFn))
-              ]
-        (cached-file-path-fn url)
-        ;; else there is no pathFn, try to parse the URL...
-        (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
-              ]
-          (assoc (or (lookup-file-specs-in-catalog url)
-                     (parse-url url))
-                 :dir dir)))))
+  (value-trace
+   ::get-cached-file-spec
+   [::context context
+    ::url url
+    ]
+   (or (if-let [cached-file-path-fn (unique (context :rdf-app/UrlCache :rdf-app/pathFn))
+                ]
+         (cached-file-path-fn url)
+         ;; else there is no pathFn, try to parse the URL...
+         (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
+               ]
+           (assoc (or (lookup-file-specs-in-catalog url)
+                      (parse-url url))
+                  :dir dir))))))
 
 (defn cache-url-as-local-file
   "RETURNS `cached-file`, with contents of `url` loaded
@@ -424,12 +495,18 @@ It includes:
     - `cached-file-path` names a local file to contain contents from `url`
   - VOCABULARY (for `context`)
     - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
-      - optional. Default will try to parse `parse-map` from `url` itself
+      - optional. Default will try to derive `parse-map` from `url` first by looking
+        it up in the @`resource-catalog` and then by parsing the `url` itself
     - [:rdf-app/UrlCache :rdf-app/directory `cache-directory`]
     - `cached-file-path-fn` := fn (uri) -> `parse-map`
     - `parse-map` := m s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
   "
   [context url]
+  (value-trace
+   ::cache-url-as-local-file
+   [::context context
+    ::url url
+    ]
   (if-let [temp-file-path (some-> (get-cached-file-path-spec context url)
                                   (cached-file-path))
            ]
@@ -448,7 +525,7 @@ It includes:
                     :body)
 
                 :else
-                (throw (ex-info "Resource not sufficiently specified in context"
+                (throw (ex-info "Resource type not sufficiently specified in context"
                                 {:type ::ResourceNotSufficientlySpecifiedInContext
                                  ::context context
                                  ::url url
@@ -460,7 +537,7 @@ It includes:
                     {:type ::NOCachingPathCouldBeInferredForURL
                      ::context context
                      ::url url
-                     }))))
+                     })))))
 
 
 (defmethod load-rdf [:rdf-app/IGraph :rdf-app/FileResource]
@@ -485,7 +562,7 @@ It includes:
 (defmethod load-rdf :default
   [context file-id]
   (throw (ex-info "No method for rdf/load-rdf"
-                  {:type ::NoMethodForTempLoadRdf
+                  {:type ::NoMethodForLoadRdf
                    ::context context
                    ::file file-id
                    ::dispatch (load-rdf-dispatch context file-id)
@@ -525,14 +602,20 @@ It includes:
   {:pre [(fn [context _] (context #'read-rdf :rdf-app/hasGraphDispatch))
          ]
    }
-  ;; return vector...
-  [(unique (context #'read-rdf :rdf-app/hasGraphDispatch))
-   ,
-   (if-let [to-read-dispatch (unique (context #'read-rdf :rdf-app/toImportDispatchFn))]
-     (to-read-dispatch to-read)
-     ;; else no despatch function was provided
-     (standard-import-dispatch to-read))
-   ])
+  (value-trace
+   ::read-rdf-dispatch
+   [::context context
+    ::g g
+    ::to-read to-read
+    ]
+   ;; return vector...
+   [(unique (context #'read-rdf :rdf-app/hasGraphDispatch))
+    ,
+    (if-let [to-read-dispatch (unique (context #'read-rdf :rdf-app/toImportDispatchFn))]
+      (to-read-dispatch to-read)
+      ;; else no despatch function was provided
+      (standard-import-dispatch to-read))
+    ]))
 
 (defmethod read-rdf [:rdf-app/IGraph :rdf-app/FileResource]
   [context g url]
@@ -548,12 +631,10 @@ It includes:
                                 url)
        (read-rdf g context)))
 
-
-
 (defmethod read-rdf :default
   [context file-id]
   (throw (ex-info "No method for rdf/read-rdf"
-                  {:type ::NoMethodForTempLoadRdf
+                  {:type ::NoMethodForReadRdf
                    ::context context
                    ::file file-id
                    ::dispatch (read-rdf-dispatch context file-id)

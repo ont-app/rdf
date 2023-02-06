@@ -353,6 +353,7 @@ It includes:
    [::context context
     ::to-load to-load
     ]
+  
    ;; return [graph-dispatch, to-load-dispatch] ...
    [(unique (context #'load-rdf :rdf-app/hasGraphDispatch))
     ,
@@ -599,11 +600,18 @@ It includes:
 (defn read-rdf-dispatch
   "Returns [graph-dispatch to-read-dispatch]. See docstring for `rdf/read-rdf`"
   [context g to-read]
-  {:pre [(fn [context _] (context #'read-rdf :rdf-app/hasGraphDispatch))
+  {:pre [(instance? ont_app.igraph.graph.Graph context)
+         (context #'read-rdf :rdf-app/hasGraphDispatch)
          ]
    }
+  (trace
+   ::starting-read-rdf-dispatch
+   ::context context
+   ::g g
+   ::to-read to-read
+   )
   (value-trace
-   ::read-rdf-dispatch
+   ::value-of-read-rdf-dispatch
    [::context context
     ::g g
     ::to-read to-read
@@ -622,14 +630,14 @@ It includes:
   (->> (cache-url-as-local-file (igraph/add context
                                             [url :rdf/type :rdf-app/FileResource])
                                 url)
-       (read-rdf g context)))
+       (read-rdf context g)))
 
 (defmethod read-rdf [:rdf-app/IGraph :rdf-app/WebResource]
   [context g url]
   (->> (cache-url-as-local-file (igraph/add context
                                             [url :rdf/type :rdf-app/WebResource])
                                 url)
-       (read-rdf g context)))
+       (read-rdf context g)))
 
 (defmethod read-rdf :default
   [context file-id]

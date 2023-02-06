@@ -121,6 +121,30 @@ Where
        false))
   report)
 
+(defn test-read-rdf-methods
+  [report]
+  (let [make-graph (unique (@report
+                            :rdf-app/RDFImplementationReport
+                            :rdf-app/makeGraphFn))
+        read-rdf-file (unique (@report
+                               :rdf-app/RDFImplementationReport
+                               :rdf-app/readFileFn))
+        assert-and-report! (partial igts/do-assert-and-report! report #'test-load-of-web-resource)
+        ]
+    ;; Read web resource (rdfs schema)
+    (let [rdfs-graph (read-rdf-file (make-graph)
+                                    (java.net.URL.
+                                     "http://www.w3.org/2000/01/rdf-schema#"))
+          ]
+
+      (assert-and-report!
+       :rdf-app/RdfsSubjectsShouldNotBeEmpty
+       "Loading a URL for a web resource"
+       (let [subjects (igraph/subjects rdfs-graph)
+             ]
+         (empty? subjects))
+       false)))
+  report)
 
 (def transit-test-map
   "A map containing clojure constructs serializable under transit"

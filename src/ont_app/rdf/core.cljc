@@ -184,6 +184,7 @@ It includes:
 ;; INPUT/OUTPUT
 ;;;;;;;;;;;;;;;;;;
 
+
 ;; KWI/URI conversion for catalog contents
 (defn coerce-graph-element
   "Returns `x`, possibly coerced to either a kwi or a java.net.URI per `policy`
@@ -241,12 +242,12 @@ It includes:
 
 (def resource-catalog
   "A native normal graph using this vocabulary:
-  - [`namespace-uri` :dcat/downloadURL `down-load-url`]
+  - [`namespace-uri` :dcat/downloadURL `download-url`]
   - [`namespace-uri` :vann/preferredNamespacePrefix `prefix`]
   - [`download-url` :dcat/mediaType `media-type`]
   - where
     - `download-url` is a URL string
-    - `media-type` should be appropriate 'accept' for an http call.
+    - `media-type` := :rdf/type :dct/MediaTypeOrExtent
   "
   (atom (->> (voc/prefix-to-ns)
              (reduce-kv collect-ns-catalog-metadata
@@ -282,35 +283,33 @@ It includes:
                           :rdf-app/directory "/tmp/rdf-app/UrlCache"]
                          ]))))
 
-(defn standard-import-dispatch
-  "Returns a standard `dispatch-key` for `to-import`
+(defn standard-data-transfer-dispatch
+  "Returns a standard `dispatch-key` for `to-transfer`
   - Where
-    - `to-import` is typically an argument to the `load-rdf` or `read-rdf` methods.
+    - `to-transfer` is typically an argument to the `load-rdf` or `read-rdf` methods.
     - `dispatch-key` :~ #{:rdf-app/LocalFile, :rdf-app/FileResource :rdf/WebResource}
-      or the type of `to-import`.
-    - :rdf-app/LocalFile indicates that `to-import` is a local path string
-    - :rdf-app/FileResource indicates that `to-import` is a file resource (maybe from a jar)
+      or the type of `to-transfer`.
+    - :rdf-app/LocalFile indicates that `to-transfer` is a local path string
+    - :rdf-app/FileResource indicates that `to-transfer` is a file resource (maybe from a jar)
     - :rdf-app/WebResource indicates something accessible through a curl call.
   "
-  [to-import]
+  [to-transfer]
   (cond
-    (and (string? to-import)
-         (.exists (io/file to-import)))
+    (and (string? to-transfer)
+         (.exists (io/file to-transfer)))
     :rdf-app/LocalFile
 
-    (and (instance? java.io.File to-import)
-         (.exists to-import))
+    (instance? java.io.File to-transfer)
     :rdf-app/LocalFile
     
-    (spec/valid? ::file-resource to-import)
+    (spec/valid? ::file-resource to-transfer)
     :rdf-app/FileResource
 
-    (spec/valid? ::web-resource to-import)       
+    (spec/valid? ::web-resource to-transfer)
     :rdf-app/WebResource
 
-    :else (type to-import))
+    :else (type to-transfer))
   )
-
 
 (declare load-rdf-dispatch)
 (defmulti load-rdf
@@ -360,7 +359,7 @@ It includes:
     (if-let [to-load-dispatch (unique (context #'load-rdf  :rdf-app/toImportDispatchFn))]
       (to-load-dispatch to-load)
       ;; else no despatch function was provided
-      (standard-import-dispatch to-load))
+      (standard-data-transfer-dispatch to-load))
     ]))
    
 
@@ -622,7 +621,7 @@ It includes:
     (if-let [to-read-dispatch (unique (context #'read-rdf :rdf-app/toImportDispatchFn))]
       (to-read-dispatch to-read)
       ;; else no despatch function was provided
-      (standard-import-dispatch to-read))
+      (standard-data-transfer-dispatch to-read))
     ]))
 
 (defmethod read-rdf [:rdf-app/IGraph :rdf-app/FileResource]
@@ -646,6 +645,76 @@ It includes:
                    ::context context
                    ::file file-id
                    ::dispatch (read-rdf-dispatch context file-id)
+                   })))
+
+;; write-rdf
+
+
+(declare write-rdf-dispatch)
+(defmulti write-rdf
+  "Side-effect: writes contents of  `g` to  `to-write` in `fmt`,
+  Returns: modified `g`
+  - args: [context g to-write fmt]
+  - dispatched on: [graph-dispatch to-write-dispatch fmt]
+  - Where
+    - `context` is a native-normal graph with descriptions per the vocabulary below.
+       It may also provide platform-specific details that inform specific methods.
+    - `to-write` is typically a path or URL, but could be anything you write a method for
+      - if this is a file name that exists in the local file system this will be
+        dispatched as `:rdf-app/LocalFile`.
+    - `graph-dispatch` is the dispatch value identifying the IGraph implementation
+    - `to-write-dispatch` is the dispatch value derived for `to-write`
+    - `fmt` should be a KWI derived from `:dct/MediaTypeOrExtent`
+
+  - VOCABULARY (in `context`)
+  - [`#'write-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]
+  - [`#'write-rdf` :rdf-app/toExportDispatchFn (fn [to-write] -> `to-write-dispatch`)]
+    ... optional. Defaults to (type to-write)
+  "
+  ;; There's a tricky circular dependency here in reference to #'write-rdf....
+  (fn [context g to-write fmt] (write-rdf-dispatch context g to-write fmt)))
+
+(defn write-rdf-dispatch
+  "Returns [graph-dispatch to-write-dispatch fmt]. See docstring for `rdf/write-rdf`"
+  [context g to-write fmt]
+  {:pre [(instance? ont_app.igraph.graph.Graph context)
+         (context #'write-rdf :rdf-app/hasGraphDispatch)
+         ]
+   }
+  (trace
+   ::starting-write-rdf-dispatch
+   ::context context
+   ::g g
+   ::to-write to-write
+   ::fmt fmt
+   )
+  (value-trace
+   ::value-of-write-rdf-dispatch
+   [::context context
+    ::g g
+    ::to-write to-write
+    ::fmt fmt
+    ]
+   ;; return vector...
+   [(unique (context #'write-rdf :rdf-app/hasGraphDispatch))
+    ,
+    (if-let [to-write-dispatch (unique (context #'write-rdf :rdf-app/toExportDispatchFn))]
+      (to-write-dispatch to-write)
+      ;; else no despatch function was provided
+      (standard-data-transfer-dispatch to-write))
+    ,
+    fmt
+    ]))
+
+(defmethod write-rdf :default
+  [context g file-id fmt]
+  (throw (ex-info "No method for rdf/write-rdf"
+                  {:type ::NoMethodForWriteRdf
+                   ::context context
+                   ::g g
+                   ::file file-id
+                   ::fmt fmt
+                   ::dispatch (write-rdf-dispatch context g file-id fmt)
                    })))
 
 ;;;;;;;;;;;;;;;;;;;;

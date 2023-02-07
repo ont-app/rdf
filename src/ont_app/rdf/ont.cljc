@@ -116,7 +116,7 @@ for this class."
 
 
 (def formats
-     [[:formats/JSON-LD "application+json" ".jsonld"]
+     [[:formats/JSON-LD "application/ld+json" ".jsonld"]
       [:formats/N3 "text/rdf+n3" ".n3"]
       [:formats/N-triples "application/n-triples" ".nt"]
       [:formats/N-Quads "application/n-quads" ".nq"]
@@ -149,8 +149,6 @@ for this class."
 
 (doseq [[k m s] formats]
   (add-media-type k m s))
-  
-
          
 ;; TEST SUPPORT
 (update-ontology!

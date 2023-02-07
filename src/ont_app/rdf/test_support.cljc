@@ -146,6 +146,33 @@ Where
        false)))
   report)
 
+(defn test-write-rdf-methods
+  [report]
+  (let [load-rdf-file (unique (@report
+                               :rdf-app/RDFImplementationReport
+                               :rdf-app/loadFileFn))
+        write-rdf-file (unique (@report
+                               :rdf-app/RDFImplementationReport
+                               :rdf-app/writeFileFn))
+        assert-and-report! (partial igts/do-assert-and-report! report #'test-load-of-web-resource)
+        ]
+    (let [g (load-rdf-file (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
+          output  (io/file "/tmp/test-write-methods.ttl")
+          ]
+      (write-rdf-file g output)
+      (assert-and-report!
+       :rdf-app/WrittenFileShouldExist
+       "Writing the file should exist"
+       (.exists (io/file output))
+       true)
+      (assert-and-report!
+       :rdf-app/WrittenFileShouldNotBeEmpty
+       "Writing the file should exist"
+       (> (.length (io/file output)) 0)
+       true))
+    report))
+
+
 (def transit-test-map
   "A map containing clojure constructs serializable under transit"
   {:sub-map {:a "this is a string"}

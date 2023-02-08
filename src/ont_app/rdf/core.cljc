@@ -220,7 +220,7 @@ It includes:
   "Reducing function outputs `gacc'` given voc metadata assigned to namespace
   - NOTE: typically used to initialize the resource catalog.
   "
-  [gacc prefix ns]
+  [gacc _prefix ns]
   (let [m (voc/get-ns-meta ns)
         uri (:vann/preferredNamespaceUri m)
         prefix (:vann/preferredNamespacePrefix m)
@@ -403,13 +403,13 @@ It includes:
     - `ext` is the file suffix associated with the media type of `url` in the catalog
   "
   [url]
-  (if-let [lookup (catalog-lookup url)
-           ]
-        {:url (str url)
-         :path (.getPath url)
-         :stem (:?prefix lookup)
-         :ext (clojure.string/replace (:?suffix lookup) #"\." "")
-         }))
+  (when-let [lookup (catalog-lookup url)
+             ]
+    {:url (str url)
+     :path (.getPath url)
+     :stem (:?prefix lookup)
+     :ext (clojure.string/replace (:?suffix lookup) #"\." "")
+     }))
 
   
 (defn http-get-from-catalog
@@ -442,7 +442,7 @@ It includes:
   (let [path (.getPath url)
         matches (re-matches parse-url-re path)
         ]
-    (if-let [[_ stem ext] matches]
+    (when-let [[_ stem ext] matches]
       {:url (str url)
        :path path
        :stem stem
@@ -474,15 +474,15 @@ It includes:
    [::context context
     ::url url
     ]
-   (or (if-let [cached-file-path-fn (unique (context :rdf-app/UrlCache :rdf-app/pathFn))
-                ]
-         (cached-file-path-fn url)
-         ;; else there is no pathFn, try to parse the URL...
-         (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
-               ]
-           (assoc (or (lookup-file-specs-in-catalog url)
-                      (parse-url url))
-                  :dir dir))))))
+   (if-let [cached-file-path-fn (unique (context :rdf-app/UrlCache :rdf-app/pathFn))
+            ]
+     (cached-file-path-fn url)
+     ;; else there is no pathFn, try to parse the URL...
+     (let [dir (unique (context :rdf-app/UrlCache :rdf-app/directory))
+           ]
+       (assoc (or (lookup-file-specs-in-catalog url)
+                  (parse-url url))
+              :dir dir)))))
 
 (defn cache-url-as-local-file
   "RETURNS `cached-file`, with contents of `url` loaded
@@ -637,16 +637,16 @@ It includes:
        (read-rdf context g)))
 
 (defmethod read-rdf :default
-  [context file-id]
+  [context g file-id]
   (throw (ex-info "No method for rdf/read-rdf"
                   {:type ::NoMethodForReadRdf
                    ::context context
+                   ::g g
                    ::file file-id
-                   ::dispatch (read-rdf-dispatch context file-id)
+                   ::dispatch (read-rdf-dispatch context g file-id)
                    })))
 
 ;; write-rdf
-
 
 (declare write-rdf-dispatch)
 (defmulti write-rdf

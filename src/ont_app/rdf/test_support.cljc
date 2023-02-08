@@ -7,25 +7,27 @@
    ;; "rdf-test" ;; matches :: declarations directly
    ;; :vann/preferredNamespaceUri
    ;; "http://rdf.naturallexicon.org/ont-app/igraph/rdf-test#"
+   :clj-kondo/config '{:linters {:redundant-let {:level :off}}}
    }
   (:require
    [clojure.set]
-   [clojure.spec.alpha :as spec]
    [clojure.java.io :as io]
    [ont-app.vocabulary.core :as voc]
    [ont-app.igraph.core :as igraph :refer [
                                            add
+                                           add!
                                            subjects
                                            unique
                                            ]]
    [ont-app.igraph.graph :as native-normal]
-   [ont-app.igraph.test-support :as igts :refer [
-                                                 do-assert-and-report!
-                                                 do-report!
-                                                 ]
+   [ont-app.igraph.test-support :as igts]
+   [ont-app.rdf.core :as rdf]
+   )
+  (:import
+   [java.io
+    File
     ]
-   [ont-app.rdf.core :as rdf :refer []]
-    ))
+   ))
 
 
 (def bnode-test-data (io/resource "test_support/bnode-test.ttl"))
@@ -206,10 +208,10 @@ Where
      :rdf-app/TransitDataShouldRoundTrip
      "Writing a graph with transit-test-map to a test file and reading back in"
      (let [g (make-graph)
-           temp-file (java.io.File/createTempFile "test-transit-support" ".ttl")
+           temp-file (File/createTempFile "test-transit-support" ".ttl")
            ]
-       (igraph/add! g  [:rdf-app/TransitTestMap
-                        :rdf-app/hasMap transit-test-map])
+       (add! g  [:rdf-app/TransitTestMap
+                 :rdf-app/hasMap transit-test-map])
        (write-rdf-file g temp-file)
        (let [g' (load-rdf-file temp-file)]
          (= (unique (g' :rdf-app/TransitTestMap

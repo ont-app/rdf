@@ -171,8 +171,6 @@ It includes:
 (spec/def ::file-resource (fn [url] (and (instance? java.net.URL url)
                                              (-> (.getProtocol url)
                                                  #{"file" "jar"}))))
-
-
 (spec/def ::web-resource (fn [url] (and (instance? java.net.URL url)
                                         (-> (.getProtocol url)
                                             #{"http" "https"}))))

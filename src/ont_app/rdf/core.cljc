@@ -11,12 +11,11 @@ It includes:
    ;; These errors were found to be spurious, related to cljs ...
    :clj-kondo/config '{:linters {:unresolved-symbol {:level :off}
                                  }}
-   }
+   } ;; meta
   (:require
    [clojure.string :as s]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
-   [clj-http.client :as http]
    [cljstache.core :as stache]
    [cognitect.transit :as transit]
    ;; ont-app
@@ -26,12 +25,12 @@ It includes:
    [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
    ;; reader conditionals
+   #?(:clj [clj-http.client :as http]) ;; todo add cljs-http.client?
    #?(:clj [clojure.java.io :as io])
    #?(:clj [ont-app.graph-log.levels :as levels
             :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
              :refer-macros [warn debug value-trace value-debug]])
-   
    ) ;; require
   #?(:clj
      (:import
@@ -236,6 +235,23 @@ It includes:
                       ::args [stem ext]
                       }))))
 
+
+(defn cljc-http-get
+  "Makes a GET call to `url` with `req`. Not yet supported in cljs.
+  - Where
+    - `url` is a URL or a URL string
+    - `req` is an http request map
+  "
+  [url req]
+  #?(:clj
+     (http/get (str url) req)
+     :cljs
+     ;; TODO: probably need to import cljs-http. Pending issue 4
+     (throw (ex-info "Http-get not yet supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-http-get
+                      ::args [url req]
+                      }))))
 
 ;; NO READER MACROS BELOW THIS POINT
 ;; except in try/catch clauses
@@ -516,8 +532,8 @@ It includes:
   (let [lookup (catalog-lookup url)
         ]
     (when lookup
-      (http/get (str url)
-                {:accept (:?media-type lookup)})
+      (cljc-http-get (str url)
+                     {:accept (:?media-type lookup)})
       )))
 
 (def parse-url-re

@@ -1,3 +1,5 @@
+- v 0.2.4:
+  - commenting out deps on clojurescript pending resolution of issue 4
 - v 0.2.3:
   - i/o
     - load-rdf multimethod

@@ -2,12 +2,12 @@
  :paths ["src" "resources"]
   :deps {
          org.clojure/clojure {:mvn/version "1.11.1"}
-         org.clojure/clojurescript {:mvn/version "1.11.60"
-                                    :exclusions [org.msgpack/msgpack]
-                                    ;; ... per nvd warning CVE-2022-41719
-                                    }
+         ;; org.clojure/clojurescript {:mvn/version "1.11.60"
+         ;;                            :exclusions [org.msgpack/msgpack]
+         ;;                            ;; ... per nvd warning CVE-2022-41719
+         ;;                            }
          com.cognitect/transit-clj {:mvn/version "1.0.329"}
-         com.cognitect/transit-cljs {:mvn/version "0.8.280"}
+         ;; com.cognitect/transit-cljs {:mvn/version "0.8.280"}
          clj-http/clj-http {:mvn/version "3.12.3"}
          ont-app/graph-log {:mvn/version "0.2.0"}
          

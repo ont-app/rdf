@@ -4,6 +4,8 @@ A backstop for shared logic between rdf-based implementations of IGraph.
 
 Part of the ont-app library, dedicated to Ontology-driven development.
 
+Note: clojurescript implementation is not supported at this time.
+
 ## Contents
 - [Dependencies](#h2-dependencies)
 - [Motivation](#h2-motivation)

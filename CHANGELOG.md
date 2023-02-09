@@ -1,3 +1,5 @@
+- v 0.2.7:
+  - Wrapping all the transit stuff in reader conditionals.
 - v 0.2.6:
   - Wrapping all the http stuff in reader conditionals.
 - v 0.2.5:

@@ -17,20 +17,21 @@ It includes:
    [clojure.spec.alpha :as spec]
    ;; 3rd party
    [cljstache.core :as stache]
-   [cognitect.transit :as transit]
    ;; ont-app
    [ont-app.igraph.core :as igraph :refer [unique]]
    [ont-app.igraph.graph :as native-normal]
    [ont-app.vocabulary.core :as voc]
-   [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
    ;; reader conditionals
    #?(:clj [clj-http.client :as http]) ;; todo add cljs-http.client?
    #?(:clj [clojure.java.io :as io])
+   #?(:clj [cognitect.transit :as transit]) ;; todo remove conditional after issue 4
    #?(:clj [ont-app.graph-log.levels :as levels
             :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
              :refer-macros [warn debug value-trace value-debug]])
+   #?(:clj [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]) ;; todo remove conditional after issue 4
+
    ) ;; require
   #?(:clj
      (:import
@@ -116,7 +117,12 @@ It includes:
           :json
           {:handlers @transit-read-handlers}))
         :cljs
-        (transit/read
+        (throw (ex-info "read-transit-json not supported in cljs"
+                        {:type ::NotSupportedInCljs
+                         ::fn #'read-transit-json
+                         ::args [s]
+                         }))
+        #_(transit/read
          (transit/reader
           :json
           {:handlers @transit-read-handlers})
@@ -140,9 +146,14 @@ It includes:
         value)
        (String. (.toByteArray output-stream)))
      :cljs
-     (transit/write
-      (transit/writer :json {:handlers @transit-write-handlers})
-      value)))
+     (throw (ex-info "render-transit-json not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'render-transit-json
+                      ::args [value]
+                      }))
+     #_(transit/write
+        (transit/writer :json {:handlers @transit-write-handlers})
+        value)))
 
 
 (defn cljc-file-exists?
@@ -849,14 +860,17 @@ Where
   - `write-handler` := fn [s] -> {`field` `value`, ...}
   " 
   (atom
-   {LangStr
-    (cognitect.transit/write-handler
-     "ont-app.vocabulary.lstr.LangStr"
-     (fn [ls]
-       {:lang (.lang ls)
-        :s (.s ls)
-        }))
-    }))
+   #?(:clj
+      {LangStr
+       (cognitect.transit/write-handler
+        "ont-app.vocabulary.lstr.LangStr"
+        (fn [ls]
+          {:lang (.lang ls)
+           :s (.s ls)
+           }))
+       }
+      :cljs
+      {})))
 
 (def transit-read-handlers
   "Atom of the form {`className` `read-handler, ...}`
@@ -867,12 +881,15 @@ Where
     write-handler in @`transit-write-handlers`.
   "
   (atom
-   {"ont-app.vocabulary.lstr.LangStr"
-    (cognitect.transit/read-handler
-     (fn [from-rep]
-       (->LangStr (:s from-rep) (:lang from-rep))))
-    }
-    ))
+   #?(:clj
+      {"ont-app.vocabulary.lstr.LangStr"
+       (cognitect.transit/read-handler
+        (fn [from-rep]
+          (->LangStr (:s from-rep) (:lang from-rep))))
+       }
+      :cljs
+      {})
+   ))
 
 
 (defn render-literal-as-transit-json

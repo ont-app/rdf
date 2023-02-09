@@ -1,5 +1,10 @@
-- v 0.2.3
-  - 
+- v 0.2.3:
+  - i/o
+    - load-rdf multimethod
+    - read-rdf multimethod
+    - write-rdf multimethod
+    - ontology support for MIME formats
+  - added a test-support module
 - v 0.2.2:
   - Got clumsy with the release tagging, which CI did not
     forgive. Bumping the version to goose it a bit.

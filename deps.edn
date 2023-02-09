@@ -61,3 +61,5 @@
            ;;          }
            } ;; aliases
  }
+;; NOTES:
+;; NVD flags CVE-2023-0247 as HIGH for clojurescript, but closer inspection reveals that this problem originates in a GO repo, so probs false negative. See https://clojurians.slack.com/archives/C03S1L9DN/p1674467942513839 for discussion.

@@ -5,6 +5,7 @@ It includes:
 - support for LangStr using the #voc/lstr custom reader
 - support for ^^transit:json datatype tags
 - templating utilities for the standard IGraph member access methods.
+- i/o methods `load-rdf` `read-rdf` and `write-rdf`.
  "
    :author "Eric D. Scott"
    ;; These errors were found to be spurious, related to cljs ...
@@ -282,9 +283,9 @@ It includes:
                          ]))))
 
 (defn standard-data-transfer-dispatch
-  "Returns a standard `dispatch-key` for `to-transfer`
+  "Returns a standard `dispatch-key` for `to-transfer`, defaulting to (type to-transfer)
   - Where
-    - `to-transfer` is typically an argument to the `load-rdf` or `read-rdf` methods.
+    - `to-transfer` is typically an argument to the `load-rdf`, `read-rdf` or `write-rdf`       methods.
     - `dispatch-key` :~ #{:rdf-app/LocalFile, :rdf-app/FileResource :rdf/WebResource}
       or the type of `to-transfer`.
     - :rdf-app/LocalFile indicates that `to-transfer` is a local path string
@@ -328,7 +329,7 @@ It includes:
   - VOCABULARY (in `context`)
     - [`#'load-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]
     - [`#'load-rdf` :rdf-app/toImportDispatchFn (fn [to-load] -> to-load-dispatch)]
-      ... optional. Defaults to (type to-load)
+      ... optional. Defaults to output of `standard-data-transfer-dispatch`
     - [`#'load-rdf` :rdf-app/extensionFn (fn [to-load] -> file-extension)]
       ... optional. By default it parses the presumed path name described by `to-load`
     - [rdf-app/UrlCache rdf-app/directory `cache-directory`]
@@ -587,7 +588,7 @@ It includes:
   - VOCABULARY (in `context`)
   - [`#'read-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]
   - [`#'read-rdf` :rdf-app/toImportDispatchFn (fn [to-read] -> `to-read-dispatch`)]
-    ... optional. Defaults to (type to-read)
+    ... optional. Defaults to output of `standard-data-transfer-dispatch`
   - [`#'read-rdf` :rdf-app/extensionFn (fn [to-read] -> file-extension)]
     ... optional. By default it parses the presumed path name described by `to-read`
   "
@@ -662,7 +663,7 @@ It includes:
         dispatched as `:rdf-app/LocalFile`.
     - `graph-dispatch` is the dispatch value identifying the IGraph implementation
     - `to-write-dispatch` is the dispatch value derived for `to-write`
-    - `fmt` should be a KWI derived from `:dct/MediaTypeOrExtent`
+    - `fmt` is typically a KWI derived from `:dct/MediaTypeOrExtent`
 
   - VOCABULARY (in `context`)
   - [`#'write-rdf` :rdf-app/hasGraphDispatch `graph-dispatch`]

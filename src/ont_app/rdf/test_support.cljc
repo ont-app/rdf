@@ -30,9 +30,12 @@
    ))
 
 
-(def bnode-test-data (io/resource "test_support/bnode-test.ttl"))
+(def bnode-test-data
+  "A small turtle file containing blank nodes"
+  (io/resource "test_support/bnode-test.ttl"))
 
 (defn prepare-report
+  "Returns a graph initialized for RDFImplementationReport"
   [make-graph-fn load-file-fn]
   (-> (native-normal/make-graph)
       (add [:rdf-app/RDFImplementationReport
@@ -41,7 +44,9 @@
             ])))
 
 
-(def super-sub-query (voc/prepend-prefix-declarations
+(def super-sub-query
+  "A query to test for sub/super relations"
+  (voc/prepend-prefix-declarations
                       "
 Select ?sub ?super
 Where
@@ -108,6 +113,7 @@ Where
     ))
 
 (defn test-load-of-web-resource
+  "Updates and returns a report on tests for loading web resources"
   [report]
   (let [load-rdf-file (unique (@report :rdf-app/RDFImplementationReport
                                :rdf-app/loadFileFn))
@@ -124,6 +130,7 @@ Where
   report)
 
 (defn test-read-rdf-methods
+  "Updates and returns a report testing read-rdf"
   [report]
   (let [make-graph (unique (@report
                             :rdf-app/RDFImplementationReport
@@ -149,6 +156,7 @@ Where
   report)
 
 (defn test-write-rdf-methods
+  "Updates and returns a report testing write-rdf"
   [report]
   (let [load-rdf-file (unique (@report
                                :rdf-app/RDFImplementationReport
@@ -219,6 +227,3 @@ Where
             transit-test-map)))
      true)
     report))
-
-
-  

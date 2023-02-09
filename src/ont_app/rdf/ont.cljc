@@ -116,30 +116,34 @@ for this class."
 
 
 (def formats
-     [[:formats/JSON-LD "application/ld+json" ".jsonld"]
-      [:formats/N3 "text/rdf+n3" ".n3"]
-      [:formats/N-triples "application/n-triples" ".nt"]
-      [:formats/N-Quads "application/n-quads" ".nq"]
-      [:formats/LD_patch "text/ldpatch" ".ldp"]
-      [:formats/OWL_XML "application/owl+xml" ".owx"]
-      [:formats/OWL_Functional "text/owl-functional" ".ofn"]
-      [:formats/OWL_Manchester "text/owl-manchester" ".ofm"]
-      [:formats/POWDER "powder+xml" ".wdr"]
-      [:formats/POWDER-S "powder-s+xml" ".wdrs"]
-      [:formats/PROV-N "text/provenance-notation" ".provn"]
-      [:formats/PROV-XML "application/provenance+xml" ".provx"]
-      [:formats/RDF_JSON "applicaton/rdf+json" ".rj"]
-      [:formats/RDF_XML "application/rdf+xml" ".rdf"]
-      [:formats/RIF_XML "applicaton/rif+xml" ".rif" ] ;; rule interchange
-      [:formats/SPARQL_RESULTS_XML "application/sparql-results+xml" ".srx"]
-      [:formats/SPARQL_RESULTS_JSON "application/sparql-results+json" ".srj"]
-      [:formats/SPARQL_RESULTS_CSV "text/csv" ".csv"]
-      [:formats/SPARQL_RESULTS_TSV "text/tab-separated-values" ".tsv"]
-      [:formats/Turtle "text/turtle" ".ttl"]
-      [:formats/TriG "applicaton/trig" ".trig"]
-      ])
+  "A listing of formats to be loaded into `ontology-atom`"
+  [[:formats/JSON-LD "application/ld+json" ".jsonld"]
+   [:formats/N3 "text/rdf+n3" ".n3"]
+   [:formats/N-triples "application/n-triples" ".nt"]
+   [:formats/N-Quads "application/n-quads" ".nq"]
+   [:formats/LD_patch "text/ldpatch" ".ldp"]
+   [:formats/OWL_XML "application/owl+xml" ".owx"]
+   [:formats/OWL_Functional "text/owl-functional" ".ofn"]
+   [:formats/OWL_Manchester "text/owl-manchester" ".ofm"]
+   [:formats/POWDER "powder+xml" ".wdr"]
+   [:formats/POWDER-S "powder-s+xml" ".wdrs"]
+   [:formats/PROV-N "text/provenance-notation" ".provn"]
+   [:formats/PROV-XML "application/provenance+xml" ".provx"]
+   [:formats/RDF_JSON "applicaton/rdf+json" ".rj"]
+   [:formats/RDF_XML "application/rdf+xml" ".rdf"]
+   [:formats/RIF_XML "applicaton/rif+xml" ".rif" ] ;; rule interchange
+   [:formats/SPARQL_RESULTS_XML "application/sparql-results+xml" ".srx"]
+   [:formats/SPARQL_RESULTS_JSON "application/sparql-results+json" ".srj"]
+   [:formats/SPARQL_RESULTS_CSV "text/csv" ".csv"]
+   [:formats/SPARQL_RESULTS_TSV "text/tab-separated-values" ".tsv"]
+   [:formats/Turtle "text/turtle" ".ttl"]
+   [:formats/TriG "applicaton/trig" ".trig"]
+   ])
 
 (defn add-media-type
+  "sided-effect adds entries in the ontology for `kwi` `media-type` `suffix`
+  Typically applied to `formats` listing.
+  "
   [kwi media-type suffix]
   (update-ontology! [kwi
                      :rdf/type :dct/MediaTypeOrExtent

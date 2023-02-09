@@ -9,7 +9,7 @@
 
 (def lib 'ont-app/rdf)
 
-(def version "0.2.4")
+(def version "0.2.5")
 
 (defn validate-deps
   "Throws an `ex-info` of type `::invalid-deps`, or returns `opts` unchanged"

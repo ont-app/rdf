@@ -11,7 +11,6 @@
    }
   (:require
    [clojure.set]
-   [clojure.java.io :as io]
    [ont-app.vocabulary.core :as voc]
    [ont-app.igraph.core :as igraph :refer [
                                            add
@@ -22,17 +21,11 @@
    [ont-app.igraph.graph :as native-normal]
    [ont-app.igraph.test-support :as igts]
    [ont-app.rdf.core :as rdf]
-   )
-  (:import
-   [java.io
-    File
-    ]
    ))
-
 
 (def bnode-test-data
   "A small turtle file containing blank nodes"
-  (io/resource "test_support/bnode-test.ttl"))
+  (rdf/cljc-resource "test_support/bnode-test.ttl"))
 
 (defn prepare-report
   "Returns a graph initialized for RDFImplementationReport"
@@ -42,7 +35,6 @@
             :rdf-app/makeGraphFn make-graph-fn
             :rdf-app/loadFileFn load-file-fn
             ])))
-
 
 (def super-sub-query
   "A query to test for sub/super relations"
@@ -167,18 +159,18 @@ Where
         assert-and-report! (partial igts/do-assert-and-report! report #'test-load-of-web-resource)
         ]
     (let [g (load-rdf-file (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
-          output  (io/file "/tmp/test-write-methods.ttl")
+          output  (rdf/cljc-make-file "/tmp/test-write-methods.ttl")
           ]
       (write-rdf-file g output)
       (assert-and-report!
        :rdf-app/WrittenFileShouldExist
        "Writing the file should exist"
-       (.exists (io/file output))
+       (rdf/cljc-file-exists? (rdf/cljc-make-file output))
        true)
       (assert-and-report!
        :rdf-app/WrittenFileShouldNotBeEmpty
-       "Writing the file should exist"
-       (> (.length (io/file output)) 0)
+       "Written file should not be empty"
+       (> (rdf/cljc-file-length (rdf/cljc-make-file output)) 0)
        true))
     report))
 
@@ -216,7 +208,7 @@ Where
      :rdf-app/TransitDataShouldRoundTrip
      "Writing a graph with transit-test-map to a test file and reading back in"
      (let [g (make-graph)
-           temp-file (File/createTempFile "test-transit-support" ".ttl")
+           temp-file (rdf/cljc-create-temp-file "test-transit-support" ".ttl")
            ]
        (add! g  [:rdf-app/TransitTestMap
                  :rdf-app/hasMap transit-test-map])

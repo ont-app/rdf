@@ -15,25 +15,28 @@ It includes:
   (:require
    [clojure.string :as s]
    [clojure.spec.alpha :as spec]
-   [clojure.java.io :as io]
    ;; 3rd party
    [clj-http.client :as http]
    [cljstache.core :as stache]
    [cognitect.transit :as transit]
    ;; ont-app
-   #?(:clj [ont-app.graph-log.levels :as levels
-            :refer [warn debug trace value-trace value-debug]]
-      :cljs [ont-app.graph-log.levels :as levels
-             :refer-macros [warn debug value-trace value-debug]])
    [ont-app.igraph.core :as igraph :refer [unique]]
    [ont-app.igraph.graph :as native-normal]
    [ont-app.vocabulary.core :as voc]
    [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]
    [ont-app.rdf.ont :as ont]
-   )
+   ;; reader conditionals
+   #?(:clj [clojure.java.io :as io])
+   #?(:clj [ont-app.graph-log.levels :as levels
+            :refer [warn debug trace value-trace value-debug]]
+      :cljs [ont-app.graph-log.levels :as levels
+             :refer-macros [warn debug value-trace value-debug]])
+   
+   ) ;; require
   #?(:clj
      (:import
       [java.io ByteArrayInputStream ByteArrayOutputStream]
+      [java.io File]
       [ont_app.vocabulary.lstr LangStr]
       )))
 
@@ -142,9 +145,100 @@ It includes:
       (transit/writer :json {:handlers @transit-write-handlers})
       value)))
 
+
+(defn cljc-file-exists?
+  "True when `path` exists in the local file system"
+  [path]
+  #?(:clj
+     (.exists (io/file path))
+     :cljs
+     (let []
+       (warn ::FileExistsCheckInCljs
+             :glog/message "Checking for existence of local file {{path}} in clojurescript (returning false)"
+             ::path path)
+       false
+       )))
+
+(defn cljc-is-local-file?
+  "True when `f` is a file in the local file system"
+  [f]
+  #?(:clj
+     (instance? java.io.File f)
+     :cljs
+     (let []
+       (warn ::IsLocalFileCheckInCljs
+             :glog/message "Checking whether {{f}} is local file in clojurescript (returning false)"
+             ::f f)
+
+       false)))
+
+(defn cljc-make-file
+  "Returns new file object for `path`. Not supported under cljs."
+  [path]
+  #?(:clj
+     (io/file path)
+     :cljs
+     (throw (ex-info "Make-file not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-make-file
+                      ::args [path]
+                      }))))
+  
+(defn cljc-file-length
+  "Returns length of file `f`. Not supported under cljs."
+  [f]
+  #?(:clj
+     (.length f)
+     :cljs
+     (throw (ex-info "File-length not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-file-length
+                      ::args [f]
+                      }))))
+
+(defn cljc-make-parents
+  "Ensures directory path for file `f`. Not supported under cljs."
+  [f]
+  #?(:clj
+     (io/make-parents f)
+     :cljs
+     (throw (ex-info "Make-parents not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-make-parents
+                      ::args [f]
+                      }))))
+
+(defn cljc-resource
+  "Returns the resource named by `r`. Not supported under cljs."
+  [r]
+  #?(:clj
+     (io/resource r)
+     :cljs
+     (throw (ex-info "Resource not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-resource
+                      ::args [r]
+                      }))))
+
+(defn cljc-create-temp-file
+  "Returns a temporary file named per `stem` and `ext`. Not supported under cljs.
+  - where
+    - `stem` is a general name for the file
+    - `ext` is a file extension typically starting with '.'
+  "
+  [stem ext]
+  #?(:clj
+     (File/createTempFile stem ext)
+     :cljs
+     (throw (ex-info "Create-temp-file not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'cljc-create-temp-file
+                      ::args [stem ext]
+                      }))))
+
+
 ;; NO READER MACROS BELOW THIS POINT
 ;; except in try/catch clauses
-
 
 ;; SPECS
 (def transit-re
@@ -295,10 +389,10 @@ It includes:
   [to-transfer]
   (cond
     (and (string? to-transfer)
-         (.exists (io/file to-transfer)))
+         (cljc-file-exists? to-transfer))
     :rdf-app/LocalFile
 
-    (instance? java.io.File to-transfer)
+    (cljc-is-local-file? to-transfer)
     :rdf-app/LocalFile
     
     (spec/valid? ::file-resource to-transfer)
@@ -464,7 +558,8 @@ It includes:
     contents of `url`.
   - VOCABULARY
     - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
-      - optional. Default will try to parse `m` from `url` itself
+      - optional. Default will try to infer `m` from `url` automatically
+        Either through `lookup-file-specs-in-catalog` or by parsing `url` itself.
     - [:rdf-app/UrlCache :rdf-app/directory `dir`]  
     - `cached-file-path-fn` := fn (uri) -> `m`
   "
@@ -509,11 +604,11 @@ It includes:
   (if-let [temp-file-path (some-> (get-cached-file-path-spec context url)
                                   (cached-file-path))
            ]
-    (let [cached-file (io/file temp-file-path)
+    (let [cached-file (cljc-make-file temp-file-path)
           ]
-      (when (not (and (.exists cached-file)
-                      (> (.length cached-file) 0)))
-        (io/make-parents cached-file)
+      (when (not (and (cljc-file-exists? cached-file)
+                      (> (cljc-file-length cached-file) 0)))
+        (cljc-make-parents cached-file)
         (spit cached-file
               (cond
                 (context url :rdf/type :rdf-app/FileResource)

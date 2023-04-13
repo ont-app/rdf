@@ -2,11 +2,22 @@
  :paths ["src" "resources"]
   :deps {
          org.clojure/clojure {:mvn/version "1.11.1"}
-         com.cognitect/transit-clj {:mvn/version "1.0.333"}
+         com.cognitect/transit-clj {:mvn/version "1.0.333"
+                                    :exclusions [org.msgpack/msgpack
+                                                 ;; ... per nvd warning CVE-2022-41719
+                                                 ]
+                                    }
          ;; com.cognitect/transit-cljs {:mvn/version "0.8.280"}
          clj-http/clj-http {:mvn/version "3.12.3"}
-         ont-app/graph-log {:mvn/version "0.2.0"}
-         
+         ont-app/graph-log {:mvn/version "0.2.0"
+                            :exclusions [org.clojure/data.priority-map
+                                         ;; per nvd CVE-2023-23459
+                                         ]
+
+                            }
+         ont-app/igraph {:mvn/version "0.2.2"
+                         }
+         ont-app/vocabulary {:mvn/version "0.2.2"}
         }
   :aliases {
            ;;;;;;;;;;;;;;;;
@@ -59,3 +70,5 @@
  }
 ;; NOTES:
 ;; NVD flags CVE-2023-0247 as HIGH for clojurescript, but closer inspection reveals that this problem originates in a GO repo, so probs false negative. See https://clojurians.slack.com/archives/C03S1L9DN/p1674467942513839 for discussion.
+;; CVE-2022-45688 jackson-core-2.8.7.jar. Excluding this breaks tests.
+;; linked to https://github.com/stleary/JSON-java/issues/708

@@ -21,7 +21,8 @@
    [ont-app.igraph.graph :as native-normal]
    [ont-app.igraph.test-support :as igts]
    [ont-app.rdf.core :as rdf]
-   ))
+   [ont-app.graph-log.levels :refer [trace]]
+    ))
 
 (def bnode-test-data
   "A small turtle file containing blank nodes"
@@ -105,7 +106,13 @@ Where
     ))
 
 (defn test-load-of-web-resource
-  "Updates and returns a report on tests for loading web resources"
+  "Updates and returns a report on tests for loading web resources
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/loadFileFn}
+    - `loadFileFn` links to fn[file-name] -> RDF IGraph implementation
+
+  "
   [report]
   (let [load-rdf-file (unique (@report :rdf-app/RDFImplementationReport
                                :rdf-app/loadFileFn))
@@ -122,8 +129,16 @@ Where
   report)
 
 (defn test-read-rdf-methods
-  "Updates and returns a report testing read-rdf"
+  "Updates and returns a report testing read-rdf
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/makeGraphFn, :rdf-app/readFileFn}
+    - `makeGraphFn` := fn [] -> `graph`
+    - `readFileFn` := fn[`graph` `file-url`] -> graph'
+    - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
+  "
   [report]
+  (trace ::starting-read-rdf-methods ::report report)
   (let [make-graph (unique (@report
                             :rdf-app/RDFImplementationReport
                             :rdf-app/makeGraphFn))
@@ -148,7 +163,15 @@ Where
   report)
 
 (defn test-write-rdf-methods
-  "Updates and returns a report testing write-rdf"
+  "Updates and returns a report testing write-rdf
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/readFileFn, :rdf-app/writeFileFn}
+    - `readFileFn` := fn[`graph` `file-url`] -> `graph`
+    - `writeFileFn` := fn[`graph` `output-file`] -> `output-file`
+    - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
+    - `output-file` is a path to a file for containing contents of `graph`
+  "
   [report]
   (let [load-rdf-file (unique (@report
                                :rdf-app/RDFImplementationReport

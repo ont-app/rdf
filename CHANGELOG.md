@@ -1,13 +1,13 @@
 - v 0.2.8:
   - Clarifying documentation of test support
 - v 0.2.7:
-  - Wrapping all the transit stuff in reader conditionals
+  - Wrapping all the transit stuff in reader conditionals.
 - v 0.2.6:
   - Wrapping all the http stuff in reader conditionals.
 - v 0.2.5:
   - Wrapping all the i/o stuff in reader conditionals.
 - v 0.2.4:
-  - deps on clojurescript pending resolution of issue 4
+  - commenting out deps on clojurescript pending resolution of issue 4
 - v 0.2.3:
   - i/o
     - load-rdf multimethod

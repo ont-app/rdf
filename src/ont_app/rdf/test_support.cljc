@@ -11,7 +11,6 @@
    }
   (:require
    [clojure.set]
-   [clojure.java.io :as io]
    [ont-app.vocabulary.core :as voc]
    [ont-app.igraph.core :as igraph :refer [
                                            add
@@ -22,17 +21,12 @@
    [ont-app.igraph.graph :as native-normal]
    [ont-app.igraph.test-support :as igts]
    [ont-app.rdf.core :as rdf]
-   )
-  (:import
-   [java.io
-    File
-    ]
-   ))
-
+   [ont-app.graph-log.levels :refer [trace]]
+    ))
 
 (def bnode-test-data
   "A small turtle file containing blank nodes"
-  (io/resource "test_support/bnode-test.ttl"))
+  (rdf/cljc-resource "test_support/bnode-test.ttl"))
 
 (defn prepare-report
   "Returns a graph initialized for RDFImplementationReport"
@@ -42,7 +36,6 @@
             :rdf-app/makeGraphFn make-graph-fn
             :rdf-app/loadFileFn load-file-fn
             ])))
-
 
 (def super-sub-query
   "A query to test for sub/super relations"
@@ -113,7 +106,13 @@ Where
     ))
 
 (defn test-load-of-web-resource
-  "Updates and returns a report on tests for loading web resources"
+  "Updates and returns a report on tests for loading web resources
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/loadFileFn}
+    - `loadFileFn` links to fn[file-name] -> RDF IGraph implementation
+
+  "
   [report]
   (let [load-rdf-file (unique (@report :rdf-app/RDFImplementationReport
                                :rdf-app/loadFileFn))
@@ -130,8 +129,16 @@ Where
   report)
 
 (defn test-read-rdf-methods
-  "Updates and returns a report testing read-rdf"
+  "Updates and returns a report testing read-rdf
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/makeGraphFn, :rdf-app/readFileFn}
+    - `makeGraphFn` := fn [] -> `graph`
+    - `readFileFn` := fn[`graph` `file-url`] -> graph'
+    - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
+  "
   [report]
+  (trace ::starting-read-rdf-methods ::report report)
   (let [make-graph (unique (@report
                             :rdf-app/RDFImplementationReport
                             :rdf-app/makeGraphFn))
@@ -156,7 +163,15 @@ Where
   report)
 
 (defn test-write-rdf-methods
-  "Updates and returns a report testing write-rdf"
+  "Updates and returns a report testing write-rdf
+  - Where
+    - `report` is an atom containing a native-normal graph
+    - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/readFileFn, :rdf-app/writeFileFn}
+    - `readFileFn` := fn[`graph` `file-url`] -> `graph`
+    - `writeFileFn` := fn[`graph` `output-file`] -> `output-file`
+    - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
+    - `output-file` is a path to a file for containing contents of `graph`
+  "
   [report]
   (let [load-rdf-file (unique (@report
                                :rdf-app/RDFImplementationReport
@@ -167,18 +182,18 @@ Where
         assert-and-report! (partial igts/do-assert-and-report! report #'test-load-of-web-resource)
         ]
     (let [g (load-rdf-file (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
-          output  (io/file "/tmp/test-write-methods.ttl")
+          output  (rdf/cljc-make-file "/tmp/test-write-methods.ttl")
           ]
       (write-rdf-file g output)
       (assert-and-report!
        :rdf-app/WrittenFileShouldExist
        "Writing the file should exist"
-       (.exists (io/file output))
+       (rdf/cljc-file-exists? (rdf/cljc-make-file output))
        true)
       (assert-and-report!
        :rdf-app/WrittenFileShouldNotBeEmpty
-       "Writing the file should exist"
-       (> (.length (io/file output)) 0)
+       "Written file should not be empty"
+       (> (rdf/cljc-file-length (rdf/cljc-make-file output)) 0)
        true))
     report))
 
@@ -216,7 +231,7 @@ Where
      :rdf-app/TransitDataShouldRoundTrip
      "Writing a graph with transit-test-map to a test file and reading back in"
      (let [g (make-graph)
-           temp-file (File/createTempFile "test-transit-support" ".ttl")
+           temp-file (rdf/cljc-create-temp-file "test-transit-support" ".ttl")
            ]
        (add! g  [:rdf-app/TransitTestMap
                  :rdf-app/hasMap transit-test-map])

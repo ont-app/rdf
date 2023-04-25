@@ -1,3 +1,7 @@
+- v 0.2.9:
+  - Reforming caching behavior
+    - Only load-rdf and read-rdf methods defined here dispatch on :rdf-app/CachedResource
+    - Adding clear-url-cache! function
 - v 0.2.8:
   - Clarifying documentation of test support
 - v 0.2.7:

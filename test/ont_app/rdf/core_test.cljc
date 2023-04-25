@@ -4,16 +4,18 @@
       :clj [clojure.test :refer :all])
    [cljstache.core :as stache]
    [clojure.java.io :as io]
+   [clojure.reflect :refer [reflect]]
    [clojure.spec.alpha :as spec]
    [clojure.string :as str]
    [clj-http.client :as http]
    [ont-app.graph-log.core :as glog]
-   [ont-app.igraph.core :as igraph :refer [unique]]
+   [ont-app.igraph.core :as igraph :refer [assert-unique unique]]
    [ont-app.igraph.graph :as native-normal :refer [make-graph]]
    [ont-app.rdf.core :as rdf-app]
    [ont-app.rdf.test-support :as test-support]
    [ont-app.vocabulary.core :as voc]
    [ont-app.vocabulary.lstr :as lstr]
+   #?(:clj [clojure.repl :refer :all])
    #?(:clj [ont-app.graph-log.levels :as levels
             :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
@@ -63,6 +65,8 @@
 
 
 (derive ::TestGraphIO :rdf-app/IGraph)
+(derive :rdf-app/FileResource :rdf-app/CachedResource)
+(derive :rdf-app/WebResource :rdf-app/CachedResource)
 
 (def test-context (-> @rdf-app/default-context
                     (igraph/add [[#'rdf-app/load-rdf
@@ -170,10 +174,16 @@
     ))
 
 (deftest test-load-rdf
-  "Loading URLs should flag an error after it's been translated to a local file. Loading local files is the responsibility of individual applications.
+  "Loading URLs should flag an error after it's been translated to a local file, since ther is no method defined in the RDF module to load local files.  Loading local files is the responsibility of individual implementations.
 "
   (testing "file resource"
-    (try (rdf-app/load-rdf test-context test-support/bnode-test-data)
+    (try (rdf-app/load-rdf (assert-unique
+                            test-context
+                            :rdf-app/UrlCache
+                            :rdf/type
+                            :rdf-app/SuppressLoadFileResourceCacheWarning)
+                           ;; kills a warning we're deliberately triggering
+                           test-support/bnode-test-data)
          (catch clojure.lang.ExceptionInfo e
            (let [ed (ex-data e)
                  ]
@@ -191,8 +201,6 @@
              (is (= [::TestGraphIO :rdf-app/LocalFile] (::rdf-app/dispatch ed)))
              ))))
   )
-
-
 
 (deftest test-language-tagged-strings
   (testing "langstr dispatch"
@@ -285,8 +293,27 @@
                                                  :rdf/also-just-kidding
                                                  }))})))))
 
-
-
+(deftest issue-11-caching
+  (let [cache-rdfs (fn []
+                     ;; caches the rdfs specification
+                     (rdf-app/cache-url-as-local-file
+                      (assert-unique test-context
+                                     rdfs-web-resource :rdf/type :rdf-app/WebResource)
+                      rdfs-web-resource))
+        ]
+    ;; with no urls...
+    (let [cache (cache-rdfs)
+          ]
+      (is (.exists cache))
+      (rdf-app/clear-url-cache! test-context)
+      (is (not (.exists cache))))
+    ;; with a url ...
+    (let [cache (cache-rdfs)
+          ]
+      (is (.exists cache))
+      (rdf-app/clear-url-cache! test-context rdfs-web-resource)
+      (is (not (.exists cache))))
+    ))
 
 (comment
   (require '[clojure.pprint :refer [pprint]])

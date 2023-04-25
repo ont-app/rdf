@@ -24,6 +24,9 @@ Note: clojurescript implementation is not supported at this time.
   - [Input](#input)
     - [load-rdf](#load-rdf)
     - [read-rdf](#read-rdf)
+    - [caching](#caching)
+      - [Dispatch on :rdf-app/CachedResource](#dispatch-on-cached-resource)
+      - [clear-url-cache!](#clear-url-cache)
   - [Output](#output)
     - [write-rdf](#write-rdf)
 - [Test Support](#test-support)
@@ -44,7 +47,7 @@ Require thus:
 <a name="h2-motivation"></a>
 ## Motivation
 There are numerous RDF-based platforms, each with its own
-idosyncracies, but there is also a significant overlap between the
+idiosyncrasies, but there is also a significant overlap between the
 underlying logical structure of each RDF implementation. This library aims
 to capture that overlap, parameterized appropriately for
 implementation-specific variations.
@@ -106,7 +109,7 @@ Instances of `LangStr` will be rendered as [discussed
 below](#h3-language-tagged-strings).
 
 All of this behavior can be overridden with the
-`@special-literal-dispatch` atom descussed in the following section.
+`@special-literal-dispatch` atom discussed in the following section.
 
 <a name="h4-special-literal-dispatch"></a>
 #### `@special-literal-dispatch` 
@@ -197,7 +200,7 @@ encoding data as transit. To use it, take the following steps:
 
 The datatype URI whose qname is _transit:json_ expands to
 `<http://rdf.natural-lexicon.org/ns/cognitect.transit#json>`, based on
-the following delcaration in _ont-app.rdf.ont_:
+the following declaration in _ont-app.rdf.ont_:
 
 ```
 (voc/put-ns-meta!
@@ -345,14 +348,14 @@ values for to-load/to-read/to-write arguments:
 - `:rdf-app/WebResource` for a resource available through http. See
   also the discussion of the resource catalog below.
 
-These can be overridden with e.g. `[#'rdf/load-rdf :rdf-app/toImportDisptachFn <[to-load]-> dispatch-value>]` (or `:rdf-app/toExportDispatchFn` for writes).
+These can be overridden with e.g. `(add <context> [#'rdf/load-rdf :rdf-app/toImportDisptachFn <dispatch-fn>])` (or `:rdf-app/toExportDispatchFn` for writes).
 
 
 ### The resource catalog
 
 The @`resource-catalog` is a
 [native-normal](https://github.com/ont-app/igraph#Graph) graph containing
-desciptions of web resources that you may want to add or load,
+descriptions of web resources that you may want to add or load,
 including their MIME types.
 
 This graph is automatically populated from details included in the
@@ -382,7 +385,7 @@ existing graph.
 ```
 
 It is dispatched by the function `load-rdf-dispatch` -> [graph-dispatch to-load-dispatch] 
-- `graph-dispatch` is typically the name of the record implementing
+- `graph-dispatch` is typically the class name of the record implementing
   IGraph. It is specified by the triple `[#'load-rdf
   :rdf-app/hasGraphDispatch <graph-dispatch>]` in the `context` graph.
 
@@ -396,12 +399,51 @@ It is dispatched by the function `load-rdf-dispatch` -> [graph-dispatch to-load-
 > (rdf/read-rdf <context> <g> <to-load>) -> g
 ```
 It is dispatched by the function `read-rdf-dispatch` -> [graph-dispatch to-load-dispatch] 
-- `graph-dispatch` is typically the name of the record implementing
+- `graph-dispatch` is typically the class name of the record implementing
   IGraph. It is specified by the triple `[#'read-rdf
   :rdf-app/hasGraphDispatch <graph-dispatch>]` in the `context` graph.
 
 - `to-load-dispatch` will typically be one of the special dispatch KWIs
   described in the section above, defaulting to the type of `to-load`
+
+#### Caching
+
+It may be the case that you want to retrieve a resource and cache it locally.
+
+Such files will be cached in the directory specified in your i/o
+context per `(unique (<context> :rdf-lib/UrlCache
+:rdf-lib/directory))`.
+
+<a name=dispatch-on-cached-resource></a>
+##### Dispatch on `:rdf-app/CachedResource`
+
+Both `load-rdf` and `read-rdf` have methods dispatched on `:rdf-app/CachedResource`.
+
+```
+> (derive <my-graph-implementation> :rdf-app/IGraph)
+> (derive :rdf-app/WebResource :rdf-app/CachedResource)
+> (def g (load-rdf <http://path/to/resource>))
+```
+
+This will cache the resource as a local file and be imported into your
+graph with your method to load/read local files.
+
+##### clear-url-cache!
+
+If  the contents at some URL have changed since being cached, you may clear the cache as follows:
+
+With only the i/o context provided, the entire cache will be cleared:
+
+```
+> (clear-url-cache! <context>)
+```
+
+Additional arguments should be URLs, and will clear any cached files
+associated with each such URL:
+
+```
+> (clear-url-cache! <context> (java.net.URL. "http://www.w3.org/2000/01/rdf-schema#"))
+```
 
 ### Output
 
@@ -422,7 +464,7 @@ This is dispatched on the function `write-rdf-dispatch` -> `[graph-dispatch to-w
 
 - `graph-dispatch` and `to-write-dispatch` are pretty much as above.
 - `fmt` passed through directly, and is typically one one of the
-  formot KWIs declared in `ont.cljc`, e.g. `:formats/Turtle` or
+  format KWIs declared in `ont.cljc`, e.g. `:formats/Turtle` or
   `:formats/JSON-LD`. Again, see https://www.w3.org/ns/formats/ .
 
 

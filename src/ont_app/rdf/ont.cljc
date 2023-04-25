@@ -24,7 +24,19 @@
 
 ;; I/O methods
 (update-ontology!
- [[:rdf-app/dispatchAs
+ [[:rdf-app/UrlCache
+   :dc/description "Names the cache for URL-identified content in the import context."
+   ]
+  [:rdf-app/directory
+   :rdfs/domain :rdf-app/UrlCache
+   :rdfs/range :xsd/string
+   :dc/description "Asserts in the i/o context the directory which should hold cached resources imported over the web."
+   ]
+  [:rdf-app/CachedResource
+   :rdf/type :rdfs/Class
+   :dc/description "A URL whose contents should be cached locally."
+   ]
+  [:rdf-app/dispatchAs
    :rdfs/comment "asserts an ID characterizing how some element of a multi-method should be dispatched. Typically referenced in the 'context' argument of on i/o method"
    ]])
 
@@ -113,8 +125,6 @@ for this class."
                    :rdfs/seeAlso (voc/keyword-for "https://www.w3.org/ns/formats/")
                    ])
 
-
-
 (def formats
   "A listing of formats to be loaded into `ontology-atom`"
   [[:formats/JSON-LD "application/ld+json" ".jsonld"]
@@ -141,7 +151,7 @@ for this class."
    ])
 
 (defn add-media-type
-  "sided-effect adds entries in the ontology for `kwi` `media-type` `suffix`
+  "Side-effect: adds entries in the ontology for `kwi` `media-type` `suffix`
   Typically applied to `formats` listing.
   "
   [kwi media-type suffix]
@@ -169,7 +179,7 @@ for this class."
    :dc/description "A function [g rdf-file-path] -> g'. Where g' is an RDF IGraph implemenation; used to produce the implemenation report"
    ]
   [:rdf-app/writeFileFn
-   :rdfs/domain :rdf-ap/RDFImplemantationReport
+   :rdfs/domain :rdf-ap/RDFImplementationReport
    :dc/description "A function [g rdf-file-path] -> ?. With side-effect of writing an RDF file to file-path s.t. it can be read by readFileFn; used to produce the implemenation report"
    ]
   [:rdf-app/TestSupportTest

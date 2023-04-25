@@ -11,7 +11,18 @@
   - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/loadFileFn}
   - `loadFileFn` links to fn[file-name] -&gt; RDF IGraph implementation
 </pre></div></div><div class="public anchor" id="var-test-load-of-web-resource"><h3>test-load-of-web-resource</h3><div class="usage"><code>(test-load-of-web-resource report)</code></div><div class="doc"><pre class="plaintext">Updates and returns a report on tests for loading web resources
+- Where
+  - `report` is an atom containing a native-normal graph
+  - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/loadFileFn}
+  - `loadFileFn` links to fn[file-name] -&gt; RDF IGraph implementation
+
 </pre></div></div><div class="public anchor" id="var-test-read-rdf-methods"><h3>test-read-rdf-methods</h3><div class="usage"><code>(test-read-rdf-methods report)</code></div><div class="doc"><pre class="plaintext">Updates and returns a report testing read-rdf
+- Where
+  - `report` is an atom containing a native-normal graph
+  - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/makeGraphFn, :rdf-app/readFileFn}
+  - `makeGraphFn` := fn [] -&gt; `graph`
+  - `readFileFn` := fn[`graph` `file-url`] -&gt; graph'
+  - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
 </pre></div></div><div class="public anchor" id="var-test-transit-support"><h3>test-transit-support</h3><div class="usage"><code>(test-transit-support report)</code></div><div class="doc"><pre class="plaintext">Side-effects: Updates `report` with results of tests related to transit serialization
  Returns: modified `report`
 - Where
@@ -22,5 +33,12 @@
   - `writeFileFn` links to fn[graph file-name] -&gt; ?, with side-effects that contents
        of `graph` are written to a file readable by `loadFileFn`.
 </pre></div></div><div class="public anchor" id="var-test-write-rdf-methods"><h3>test-write-rdf-methods</h3><div class="usage"><code>(test-write-rdf-methods report)</code></div><div class="doc"><pre class="plaintext">Updates and returns a report testing write-rdf
+- Where
+  - `report` is an atom containing a native-normal graph
+  - (keys (@`report` :rdf-app/RDFImplementationReport)) :~ #{:rdf-app/readFileFn, :rdf-app/writeFileFn}
+  - `readFileFn` := fn[`graph` `file-url`] -&gt; `graph`
+  - `writeFileFn` := fn[`graph` `output-file`] -&gt; `output-file`
+  - `file-url` is suitable as the `to-read` argument to rdf/read-rdf
+  - `output-file` is a path to a file for containing contents of `graph`
 </pre></div></div><div class="public anchor" id="var-transit-test-map"><h3>transit-test-map</h3><div class="usage"></div><div class="doc"><pre class="plaintext">A map containing clojure constructs serializable under transit
 </pre></div></div></div></body></html>

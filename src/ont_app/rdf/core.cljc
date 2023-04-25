@@ -472,7 +472,6 @@ It includes:
    [::context context
     ::to-load to-load
     ]
-  
    ;; return [graph-dispatch, to-load-dispatch] ...
    [(unique (context #'load-rdf :rdf-app/hasGraphDispatch))
     ,
@@ -661,21 +660,51 @@ It includes:
                      })))))
 
 
-(defmethod load-rdf [:rdf-app/IGraph :rdf-app/FileResource]
-  ;; default behavior to load URLs.
-  ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
-  [context url]
-  (->> (cache-url-as-local-file (igraph/add context
-                                            [url :rdf/type :rdf-app/FileResource])
-                                url)
-       (load-rdf context)))
+(defn clear-url-cache!
+  "Side-effect: deleletes cached local files for `url` in `urls` per `context`, or the whole cache if only `context` is specified.
+  - Where
+    - `context` is a native-normal graph informed by vocabulary below.
+    - `urls` := [`url`, ...]
+    - `url` is an instance of `java.net.URL`
+  - VOCABULARY (for `context`)
+    - [:rdf-app/UrlCache :rdf-app/pathFn `cached-file-path-fn`]
+      - optional. Default will try to derive `parse-map` from `url` first by looking
+        it up in the @`resource-catalog` and then by parsing the `url` itself
+    - [:rdf-app/UrlCache :rdf-app/directory `cache-directory`]
+    - `cached-file-path-fn` := fn (uri) -> `parse-map`
+    - `parse-map` := m s.t (keys m) :~ #{:url :path :stem :ext} for `url` informed by `context`
+  "
+  [context & urls]
+  (let [cache-dir (->> (unique (context :rdf-app/UrlCache :rdf-app/directory))
+                       (io/file))
+        ]
+    (if (empty? urls)
+      (doseq [f (filter #(not (.isDirectory %)) (file-seq cache-dir))
+              ]
+        (io/delete-file f))
+      ;; else we specified which URLs to delete
+      (doseq [url urls]
+        (let [to-delete (->> url
+                             (get-cached-file-path-spec context)
+                             (cached-file-path)
+                             (io/file))
+              ]
+          (if (.exists to-delete)
+            (io/delete-file to-delete)
+            ;; else it does not exist
+              (warn ::no-cache-file-to-delete
+                    :glog/message "URL {{url}} is not cached. Nothing to clear."
+                    :url url
+                    ::to-delete to-delete)))))))
 
-(defmethod load-rdf [:rdf-app/IGraph :rdf-app/WebResource]
-  ;; default behavior to load URLs.
+(defmethod load-rdf [:rdf-app/IGraph :rdf-app/CachedResource]
+  ;; This will make a local copy of the resource and defer to your implementation's
   ;; to enable (derive <my-Igraph> :rdf-app/IGraph)
   [context url]
   (->> (cache-url-as-local-file (igraph/add context
-                                            [url :rdf/type :rdf-app/WebResource])
+                                            [url
+                                             :rdf/type
+                                             (standard-data-transfer-dispatch url)])
                                 url)
        (load-rdf context)))
 
@@ -745,17 +774,14 @@ It includes:
       (standard-data-transfer-dispatch to-read))
     ]))
 
-(defmethod read-rdf [:rdf-app/IGraph :rdf-app/FileResource]
+(defmethod read-rdf [:rdf-app/IGraph :rdf-app/CachedResource]
   [context g url]
   (->> (cache-url-as-local-file (igraph/add context
-                                            [url :rdf/type :rdf-app/FileResource])
-                                url)
-       (read-rdf context g)))
-
-(defmethod read-rdf [:rdf-app/IGraph :rdf-app/WebResource]
-  [context g url]
-  (->> (cache-url-as-local-file (igraph/add context
-                                            [url :rdf/type :rdf-app/WebResource])
+                                            [url
+                                             :rdf/type
+                                             (standard-data-transfer-dispatch url)
+                                             ]
+                                            )
                                 url)
        (read-rdf context g)))
 

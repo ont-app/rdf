@@ -1,3 +1,12 @@
+- v 0.3.0:
+  - Changes per vocabulary 0.4.0
+    - refactoring for resource-type methods
+    - voc/dstr tags esp. for transit/json
+    - tweaks to bnode handling
+  - Adding a read-literal method
+  - Tweaks to render-literal
+  - fix to issue 12 (qname error)
+  - fix to issue 14 (reading raw from github)
 - v 0.2.9:
   - Reforming caching behavior
     - Only load-rdf and read-rdf methods defined here dispatch on :rdf-app/CachedResource

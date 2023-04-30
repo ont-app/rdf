@@ -66,7 +66,14 @@ render-literal method."
 transit via a `derive` statement. There is a render-literal keyed to the KWI 
 for this class."
    ]
-  ])
+  [:rdf-app/BnodeString
+  :rdf/type :voc/ResourceType
+  :rdfs/comment "A string conforming to the format of a blank node in Turtle/n3 or SPARQL queries."
+   ]
+  [:rdf-app/BnodeKwi
+  :rdf/type :voc/ResourceType
+  :rdfs/comment "A KWI interned in the `rdf-app` namepace whose name is an :rdf-app/BnodeString."
+   ]])
 
 
 ;; TRANSIT SUPPORT
@@ -79,22 +86,21 @@ for this class."
   :foaf/homepage "https://github.com/cognitect/transit-format"
   })
 
-
 (update-ontology!
  [[:igraph/SerializationFormat
    :rdf/type :rdfs/Class
    :rdfs/comment "Refers to a format used to encode/decode serialized values"
    ]
   [:transit/format
-   :rdfs/domain :igraph/SerializationFormat
+   :rdf/type :rdfs/Class
    :rdfs/range :rdf/Literal
    :rdfs/comment "Asserts the name of the transit encoding format"
    ]
   [:transit/json
    :rdf/type :igraph/SerializationFormat
+   :rdfs/subClassOf :dct/MediaTypeOrExtent
    :transit/format :json
    :formats/media_type "application/transit+json"
-   ;;:igraph/mimeType "application/transit+json"
    :rdfs/comment "Refers to transit data encoded as json. Literals whose 
   :datatype metadata is :transit/json should be readable with transit/read 
    encoded for format :json"
@@ -103,12 +109,10 @@ for this class."
    :rdf/type :igraph/SerializationFormat
    :transit/format :msgpack
    :formats/media_type "application/transit+msgpack"
-   ;; :igraph/mimeType "application/transit+msgpack"
    :rdfs/comment "Refers to the Transit data encoded as msgpack. Literals whose 
   :datatype metadata is :transit/msgpack should be readable with transit/read 
    encoded for format :msgpack (not currently supported)"
-   ]
-  ])
+   ]])
 
 ;; MIME types
 
@@ -150,7 +154,7 @@ for this class."
    [:formats/TriG "applicaton/trig" ".trig"]
    ])
 
-(defn add-media-type
+(defn add-media-type!
   "Side-effect: adds entries in the ontology for `kwi` `media-type` `suffix`
   Typically applied to `formats` listing.
   "
@@ -162,7 +166,7 @@ for this class."
                      ]))
 
 (doseq [[k m s] formats]
-  (add-media-type k m s))
+  (add-media-type! k m s))
          
 ;; TEST SUPPORT
 (update-ontology!

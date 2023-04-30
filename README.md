@@ -7,20 +7,28 @@ Part of the ont-app library, dedicated to Ontology-driven development.
 Note: clojurescript implementation is not supported at this time.
 
 ## Contents
-- [Dependencies](#h2-dependencies)
-- [Motivation](#h2-motivation)
+- [Dependencies](#dependencies)
+- [Motivation](#motivation)
 - [Supporting Ontology](#supporting-ontology)
-- [Literals](#h2-literals)
-  - [The `render-literal` multimethod](#h3-render-literal-multimethod)
-    - [`@special-literal-dispatch`](#h4-special-literal-dispatch)
-  - [Language-tagged strings](#h3-language-tagged-strings)
-  - [`xsd` values](#h3-xsd-values)
-  - [Transit-encoded-values](#h3-transit-encoded-values)
-- [Query templates supporting the IGraph member-access methods](#h2-query-templates)
+- [URIs](#uris)
+- [Literals](#literals)
+  - [The `render-literal` multimethod](#render-literal-multimethod)
+    - [`@special-render-literal-dispatch`](#special-render-literal-dispatch)
+  - [The `read-literal` multimethod](#the-read-literal-multimethod)
+    - [`@special-read-literal-dispatch`](#special-literal-dispatch)
+  - [Language-tagged strings](#language-tagged-strings)
+  - [Datatype-tagged strings](#datatype-tagged-strings)
+    - [`xsd` values](#xsd-values)
+    - [Transit-encoded-values](#transit-encoded-values)
+  - [String utilities](#string-utilities)
+    - [`quote-str`](#quote-str)
+    - [`remove-newlines`](#remove-newlines)
+- [Query templates supporting the IGraph member-access methods](#query-templates)
 - [I/O](#i-o)
   - [The context graph](#the-context-graph)
   - [Special dispatch KWIs](#special-dispatch-kwis)
   - [The resource catalog](#the-resource-catalog)
+  - [`infer-media-type`](#infer-media-type)
   - [Input](#input)
     - [load-rdf](#load-rdf)
     - [read-rdf](#read-rdf)
@@ -30,7 +38,7 @@ Note: clojurescript implementation is not supported at this time.
   - [Output](#output)
     - [write-rdf](#write-rdf)
 - [Test Support](#test-support)
-- [Debugging](#h2-debugging)
+- [Debugging](#debugging)
 
 <a name="h2-dependencies"></a>
 ## Dependencies
@@ -41,10 +49,9 @@ Require thus:
 ```
 (:require 
   [ont-app.rdf.core :as rdf-app]
-  )      
+  )
 ```
     
-<a name="h2-motivation"></a>
 ## Motivation
 There are numerous RDF-based platforms, each with its own
 idiosyncrasies, but there is also a significant overlap between the
@@ -55,8 +62,9 @@ implementation-specific variations.
 This includes:
 - A multimethod `render-literal`, aimed at translating between Clojure
   data and data to be stored in an RDF store.
-- Support for language-tagged strings with `#voc/lstr` reader macro
-  defined in the [vocabulary](https://github.com/ont-app/vocabulary) module.
+- Support for language-tagged strings and tagged literals with the
+  `#voc/lstr` and `#voc/dstr` reader macros defined in the
+  [vocabulary](https://github.com/ont-app/vocabulary) module.
 - Support for a `^^transit:json` datatype tag, allowing for arbitrary
   Clojure content to be serialized/deserialized as strings in
   an RDF store.
@@ -75,10 +83,42 @@ _ont-app.vocabulary.rdf_).
 The preferred namespace URI is declared as
 `"http://rdf.naturallexicon.org/rdf/ont#"`.
 
-<a name="h2-literals"></a>
+Among other things, it contains descriptions of various media types and formats.
+
+## URIs
+
+URIs are integrated with the ont-app/vocabulary
+[resource-type](https://github.com/ont-app/vocabulary#the-resource-type-multimethod)
+methods.
+
+This resource-type context adds the following recognized
+resource-types to [the types defined in
+ont-app/vocabulary](https://github.com/ont-app/vocabulary#existing-resource-types):
+
+| Resource| maps to resource type | Notes|
+| --- | --- | --- |
+| java.lang.String | :rdf-app/BnodeString | A string expressing a blank node. |
+| clojure.lang.Keyword | :rdf-app/BnodeKwi | A keyword expressing a blank node. |
+
+
+- `:rdf-app/BnodeString` matches the `bnode-name-re` pattern,
+  e.g. "_:yadda-yadda".
+- `:rdf-app/BnodeKwi` matches keywords interned in the `rdf-app`
+  namespace with names matching `bnode-name-re`.
+
+Note that the name of a bnode will not survive round-tripping, so the
+primary use for this is usually to add triples with bnodes in them by
+hand in cases where bnodes are called for. There are times when the
+RDF standard requires you to use bnodes, but if not, why not just mint
+a proper URI/KWI?
+
+The operative
+[resource-type-context](https://github.com/ont-app/vocabulary#resource-type-contexts)
+for this library is `:ont-app.rdf.core/resource-type-context`, derived from
+`:ont-app.vocabulary.core/resource-type-context`.
+
 ## Literals
 
-<a name="h3-render-literal-multimethod"></a>
 ### The `render-literal` multimethod
 
 Each RDF-based implementation of IGraph will need to translate between
@@ -101,9 +141,13 @@ There is a _translate-literal_ method defined for
 [below](#h3-transit-encoded-values). Otherwise `render-literal` is
 dispatched on the type of the argument.
 
+Instances of `DatatypeStr` will be rendered as discussed below.
+
 Integers and floats both derive from `::number`, and will be rendered
 directly as they are in Clojure by default. Values unhandled by a
 specific method will be rendered by default as strings in quotes.
+
+
 
 Instances of `LangStr` will be rendered as [discussed
 below](#h3-language-tagged-strings).
@@ -111,8 +155,7 @@ below](#h3-language-tagged-strings).
 All of this behavior can be overridden with the
 `@special-literal-dispatch` atom discussed in the following section.
 
-<a name="h4-special-literal-dispatch"></a>
-#### `@special-literal-dispatch` 
+#### `@special-render-literal-dispatch`
 
 Often there is platform-specific behavior required for specific types
 of literals, for example
@@ -129,32 +172,53 @@ may target the appropriate methods.
 The [igraph-grafter](https://github.com/ont-app/igraph-grafter) source
 has examples of this.
 
-<a name="h3-language-tagged-strings"></a>
+### The `read-literal` multimethod
+
+This method should return a KWI or a literal suitable for inclusion in
+an IGraph.
+
+Its signature is `[literal] -> graph-element`.
+
+It is typically dispatched on `(type literal)`, but it may be
+overriden by @special-read-literal-dispatch).
+
+#### `@special-read-literal-dispatch`
+
+This is basically the inverse or @`special-render-literal-dispatch`,
+allowing you to override the default of dispatching on type.
+
 ### Language-tagged strings
 
-This library imports 'ont-app.vocabulary.lstr', along with its #voc/lstr
+This library imports 'ont-app.vocabulary.lstr', along with its `#voc/lstr`
 reader macro.
 
 Such values will be dispatched on their type
 (`ont_app.vocabulary.lstr.LangStr`), and rendered as say `"my English
 words"@en`.
 
-<a name="h3-xsd-values"></a>
-### `xsd` values
+### Datatype-tagged strings
 
-Most RDF-platforms will typically provide some means of dealing with
-_xsd_-encoded values, which encode the usual scalar values such as
-integers, floats, dates, etc. 
+This library imports `ont-app.vocabulary.dstr` along with its
+`#voc/dstr` reader macro.
 
-Part of adapting IGraph to any new RDF-based platform will involve
-defining _special-literal-dispatch_ and _render-literal_ methods as
-appropriate.
+This will allow you to use the
+[voc/tag](https://github.com/ont-app/vocabulary#the-tag-multimethod)
+and
+[voc/untag](https://github.com/ont-app/vocabulary#the-untag-multimethod)
+methods to assert typed literals with arbitrary datatype tags.
+
+#### `xsd` values
+
+Xsd types are tagged with the `#voc/dstr` tag, and will untag to
+reasonable clojure values.
+
+You may want to use  _special-literal-dispatch_ and _render-literal_ methods as
+appropriate for any specific RDF platform to override this behavior.
 
 The existing `sparql-client` and `igraph-grafter` implementations
 should serve as instructive examples.
 
-<a name="h3-transit-encoded-values"></a>
-### Transit-encoded values
+#### Transit-encoded values
 
 Of course some values such as the standard Clojure containers, and
 user-defined records and datatypes are not handled by the xsd
@@ -170,18 +234,29 @@ This library supports storing such literals in serialized form using a
 > (rdf-app/read-transit-json "[1,2,3]")
 [1 2 3]
 
-> (defn round-trip [x]
-    "Returns `x` after converting it to a transit literal and re-parsing it"
+> (defn round-trip "Returns `x` after converting it to a transit literal and re-parsing it"
+    [x]
     (as-> (rdf-app/render-literal x) 
         it
         (re-matches rdf-app/transit-re it)
-        (nth it 1))
+        (nth it 1)
         (rdf-app/read-transit-json it))
         
-> (round-trip `(fn [x] "yowsa"))
-(clojure.core/fn [x] "yowsa")
+> (round-trip [1 2 3])
+[1 2 3]
 
 ```
+
+These values are encoded as #voc/dstr reader macros, using `tag` and `untag` methods:
+
+```
+> (voc/tag #{1 2 3} :transit/json)
+#voc/dstr "[\"~#set\",[1,3,2]]^^transit:json"
+>
+> (voc/untag *1)
+#{1 3 2}
+```
+
 The _render-literal_ method keyed to `:rdf/TransitData` is the handler
 encoding data as transit. To use it, take the following steps:
 
@@ -213,10 +288,36 @@ the following declaration in _ont-app.rdf.ont_:
   })
 ```
 
-<a name="h2-query-templates"></a>
+### String utilities
+
+Some convenience utilites of dealing with strings.
+
+#### `quote-str`
+
+Adds string-escapes:
+
+```clj
+> (quote-str "yadda")
+"\"yadda\""
+```
+
+#### `remove-newlines`
+
+Saves a bit of trouble if you're running into newline-based parse errors:
+
+```clj
+> my-query
+"\nSelect *\nWhere\n{\n  ?s ?p ?o.\n}\n"
+> (remove-newlines my-query)
+" Select * Where {   ?s ?p ?o. } "
+(add my-graph [:myns/MyThing :myns/informedByQuery (remove-newlines my-query)])
+
+```
+
+<a name="query-templates"></a>
 ## Query templates supporting the IGraph member-access methods
 
-It is expected that the basic IGraph member-access methods will be
+It is expected that the basic IGraph member-access methods can be
 covered by a common set of SPARQL queries for most if not all
 RDF-based implementations.
 
@@ -260,8 +361,6 @@ Wherever KWIs are involved, checks will be performed to flag warnings
 in cases where the metadata has not been properly specified for the
 implied namespace of the KWI.
 
-<a name="h3-round-tripping"></a>
-
 Note that the query template above has clauses like:
 
 ```
@@ -276,6 +375,10 @@ platform-specific scheme that supports
 nodes in subsequent queries to the same endpoint. The
 [igraph-jena](https://github.com/ont-app/igraph-jena) project provides
 a working example of this.
+
+These templates should allow you to port the IGraph protocols to new
+platforms fairly quickly, but as your implementation matures you may
+find more efficient platform-specific equivalents.
 
 <a name="i-o"></a>
 ## I/O
@@ -372,6 +475,22 @@ The media types align with other data included in the `ont-app.rdf.ont` module.
 
 See the docstring for `add-catalog-entry` for details.
 
+#### `infer-media-type`
+
+We can access media types associated with the suffix in a URL with `infer-media-type`...
+
+```clj
+> (rdf-app/infer-media-type (java.net.URL. "file:///tmp/my-file.tsv"))
+"text/tab-sparated-values"
+```
+
+This is informed by the ontology in `ont-app.rdf.ont`, containing
+descriptions using the http://www.w3.org/ns/formats/ vocabulary to
+describe instances of http://purl.org/dc/terms/MediaTypeOrExtent .
+
+You can add your own media types with
+`ont-app.rdf-ont/add-media-type!`, for which see the docstring.
+
 ### Input
 
 There are two methods for input, `load-rdf`, which translates a file
@@ -398,7 +517,7 @@ It is dispatched by the function `load-rdf-dispatch` -> [graph-dispatch to-load-
 ```
 > (rdf/read-rdf <context> <g> <to-load>) -> g
 ```
-It is dispatched by the function `read-rdf-dispatch` -> [graph-dispatch to-load-dispatch] 
+It is dispatched by the function `read-rdf-dispatch` -> `[graph-dispatch to-load-dispatch]``
 - `graph-dispatch` is typically the class name of the record implementing
   IGraph. It is specified by the triple `[#'read-rdf
   :rdf-app/hasGraphDispatch <graph-dispatch>]` in the `context` graph.
@@ -529,7 +648,6 @@ can be queried for in the report graph. Empty results for
 `query-for-failures` indicates a passing test.
 
 
-<a name="h2-debugging"></a>
 ## Debugging
 Functions in this module are logged with the
 [graph-log](https://github.com/ont-app/graph-log) logging library,

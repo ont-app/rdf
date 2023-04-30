@@ -3,6 +3,7 @@
   implementations of IGraph. 
 It includes:
 - support for LangStr using the #voc/lstr custom reader
+- support for typed literals using the #voc/dstr custom reader
 - support for ^^transit:json datatype tags
 - templating utilities for the standard IGraph member access methods.
 - i/o methods `load-rdf` `read-rdf` and `write-rdf`.
@@ -10,7 +11,7 @@ It includes:
    :author "Eric D. Scott"
    ;; These errors were found to be spurious, related to cljs ...
    :clj-kondo/config '{:linters {:unresolved-symbol {:level :off}
-                                 }}
+                                 :unresolved-namespace {:level :off}}}
    } ;; meta
   (:require
    [clojure.string :as s]
@@ -31,6 +32,7 @@ It includes:
       :cljs [ont-app.graph-log.levels :as levels
              :refer-macros [warn debug value-trace value-debug]])
    #?(:clj [ont-app.vocabulary.lstr :as lstr :refer [->LangStr]]) ;; todo remove conditional after issue 4
+   #?(:clj [ont-app.vocabulary.dstr :as dstr :refer [->DatatypeStr]]);; todo remove conditional after issue 4
 
    ) ;; require
   #?(:clj
@@ -38,14 +40,10 @@ It includes:
       [java.io ByteArrayInputStream ByteArrayOutputStream]
       [java.io File]
       [ont_app.vocabulary.lstr LangStr]
+      [ont_app.vocabulary.dstr DatatypeStr]
       )))
 
-(voc/put-ns-meta!
- 'ont-app.rdf.core
- {
-  :voc/mapsTo 'ont-app.rdf.ont
-  }
- )
+(voc/put-ns-meta! 'ont-app.rdf.core {:voc/mapsTo 'ont-app.rdf.ont})
 
 ;; aliases 
 (def prefixed
@@ -106,29 +104,35 @@ It includes:
   - `s` is a &quot;-escaped string encoded as transit
   Note: custom datatypes will be informed by @transit-read-handlers
   "
-     [^String s]
-     #?(:clj
-        (transit/read
-         (transit/reader
-          (ByteArrayInputStream. (.getBytes (clojure.string/replace
-                                             s
-                                             "&quot;" "\"")
-                                            "UTF-8"))
-          :json
-          {:handlers @transit-read-handlers}))
-        :cljs
-        (throw (ex-info "read-transit-json not supported in cljs"
-                        {:type ::NotSupportedInCljs
-                         ::fn #'read-transit-json
-                         ::args [s]
-                         }))
-        #_(transit/read
-         (transit/reader
-          :json
-          {:handlers @transit-read-handlers})
-         (clojure.string/replace
-          s
-          "&quot;" "\""))))
+  [^String s]
+  (tap> {:type ::starting-read-transit-json
+         ::s s})
+  #?(:clj
+     (transit/read
+      (transit/reader
+       (ByteArrayInputStream. (.getBytes (clojure.string/replace
+                                          s
+                                          "&quot;" "\"")
+                                         "UTF-8"))
+       :json
+       {:handlers @transit-read-handlers}))
+     :cljs
+     (throw (ex-info "read-transit-json not supported in cljs"
+                     {:type ::NotSupportedInCljs
+                      ::fn #'read-transit-json
+                      ::args [s]
+                      }))
+     #_(transit/read
+        (transit/reader
+         :json
+         {:handlers @transit-read-handlers})
+        (clojure.string/replace
+         s
+         "&quot;" "\""))))
+
+(defmethod voc/untag :transit/json
+  [datum & _]
+  (-> datum str read-transit-json))
 
 (declare transit-write-handlers)
 (defn render-transit-json 
@@ -155,6 +159,9 @@ It includes:
         (transit/writer :json {:handlers @transit-write-handlers})
         value)))
 
+(defmethod voc/tag :transit/json
+  [datum _]
+  (dstr/->DatatypeStr (render-transit-json datum) "transit:json"))
 
 (defn cljc-file-exists?
   "True when `path` exists in the local file system"
@@ -183,7 +190,7 @@ It includes:
        false)))
 
 (defn cljc-make-file
-  "Returns new file object for `path`. Not supported under cljs."
+  "Returns new file object for `path`. not yet supported under cljs."
   [path]
   #?(:clj
      (io/file path)
@@ -195,7 +202,7 @@ It includes:
                       }))))
   
 (defn cljc-file-length
-  "Returns length of file `f`. Not supported under cljs."
+  "Returns length of file `f`. not yet supported under cljs."
   [f]
   #?(:clj
      (.length f)
@@ -207,7 +214,7 @@ It includes:
                       }))))
 
 (defn cljc-make-parents
-  "Ensures directory path for file `f`. Not supported under cljs."
+  "Ensures directory path for file `f`. not yet supported under cljs."
   [f]
   #?(:clj
      (io/make-parents f)
@@ -219,7 +226,7 @@ It includes:
                       }))))
 
 (defn cljc-resource
-  "Returns the resource named by `r`. Not supported under cljs."
+  "Returns the resource named by `r`. not yet supported under cljs."
   [r]
   #?(:clj
      (io/resource r)
@@ -231,7 +238,7 @@ It includes:
                       }))))
 
 (defn cljc-create-temp-file
-  "Returns a temporary file named per `stem` and `ext`. Not supported under cljs.
+  "Returns a temporary file named per `stem` and `ext`. not yet supported under cljs.
   - where
     - `stem` is a general name for the file
     - `ext` is a file extension typically starting with '.'
@@ -280,13 +287,26 @@ It includes:
 
 (spec/def ::transit-tag (spec/and string? (fn [s] (re-matches transit-re s))))
 
+;;(def bnode-re #"^_.*")
+
+(def bnode-name-re "A regex to parse bnodes"
+  (re-pattern
+   (str "^"
+        "_"   ;; starts with _
+        "[:]" ;; followed by colon
+        "("   ;; start group
+        ".*"  ;;   anything after the colon
+        ")"   ;; end group
+        )))
+
 (defn bnode-kwi?
   "True when `kwi` matches the canonical bnode representation."
   [kwi]
   (and (keyword? kwi)
-       (some->> (namespace kwi)
+       (= (namespace kwi) "rdf-app")
+       (some->> (name kwi)
                 (str)
-                (re-matches #"^_.*"))))
+                (re-matches bnode-name-re))))
 
 (spec/def ::bnode-kwi bnode-kwi?)
 
@@ -297,8 +317,73 @@ It includes:
                                         (-> (.getProtocol url)
                                             #{"http" "https"}))))
 
+(defn normalize-bnode-string
+  "Returns `b`, possibly prepending '_:', checking for match to bnode-name-re"
+  [b]
+  {:post [(re-matches bnode-name-re %)]}
+  (if (re-matches bnode-name-re b)
+    b
+    (str "_:" b)))
 
+;;;;;;;;;;;;;;;;;;
+;; Vocabulary
+;;;;;;;;;;;;;;;;;;
 
+(voc/register-resource-type-context! ::resource-type-context ::voc/resource-type-context)
+
+(defmethod voc/resource-type [::resource-type-context (type "")]
+  [this]
+  ;; check for a string formatted like a bnode...
+  (if (re-matches #"^_[:].*" this)
+    :rdf-app/BnodeString
+    ;; else handle it like any other string....
+    (let [m (methods voc/resource-type)
+          f (m [::voc/resource-type-context (type this)])]
+      (f this))))
+
+(defmethod voc/resource-type [::resource-type-context (type :x)] ;; keyword
+  [this]
+  ;; Check for a bnode kwi...
+  (if (bnode-kwi? this)
+    :rdf-app/BnodeKwi
+    ;; else handle like any other keyword...
+    (let [m (methods voc/resource-type)
+          f (m [::voc/resource-type-context (type this)])]
+      (f this))))
+
+(defmethod voc/as-uri-string :rdf-app/BnodeKwi
+  [this]
+  ;; Non-re-trippable. Typically appearing in code
+  (let [[_ parsed-name] (re-matches bnode-name-re (name this))]
+    (when (not parsed-name)
+      (throw (ex-info (str "Cound not parse bnode kwi " this)
+                      {:type ::CoundNotParseBnodeKwi
+                       ::this this})))
+    (str "_:" parsed-name)))
+
+(defmethod voc/as-kwi :rdf-app/BnodeString
+  [this]
+  {:post [(spec/assert :voc/kwi-spec %)]}
+  (let [kw-method (get-method voc/as-kwi :voc/Kwi)
+        default (get-method voc/as-kwi :default)]
+    (cond
+      (re-matches bnode-name-re this)
+      (kw-method (keyword "rdf-app" this ))
+
+      :else
+      (default this))))
+
+(defmethod voc/as-uri-string :rdf-app/BnodeKwi
+  [this]
+  (name this))
+
+(defmethod voc/as-kwi :rdf-app/BnodeKwi
+  [this]
+  this)
+
+(defmethod voc/as-qname :rdf-app/BnodeKwi
+  [this]
+  (voc/as-uri-string this))
 
 ;;;;;;;;;;;;;;;;;;
 ;; INPUT/OUTPUT
@@ -328,7 +413,7 @@ It includes:
      ((::kwi-if policy) x)
      (if (keyword? x)
        x
-       (voc/keyword-for (str x)))
+       (voc/as-kwi (str x)))
 
      ((::uri-if policy) x)
      (if (instance? java.net.URI x)
@@ -391,7 +476,7 @@ It includes:
            :dcat/mediaType media-type
            ]]))
 
-(def default-context
+(def default-io-context
   "An atom containing a native-normal graph with default i/o context configurations.
   - NOTE: This would typically be the starting point for the i/o context of  individual
     implementations.
@@ -477,7 +562,7 @@ It includes:
     ,
     (if-let [to-load-dispatch (unique (context #'load-rdf  :rdf-app/toImportDispatchFn))]
       (to-load-dispatch to-load)
-      ;; else no despatch function was provided
+      ;; else no dispatch function was provided
       (standard-data-transfer-dispatch to-load))
     ]))
    
@@ -547,12 +632,14 @@ It includes:
       )))
 
 (def parse-url-re
-  "A regex to parse a file URL string with a file name and an extension."
+  "A regex to parse a file URL string with a file name and an extension.
+  - matches :~ [_ stem ext]
+  "
   (re-pattern
-   (str "^.*/" ;; start with anything ending in slash
+   (str "^.*/"    ;; start with anything ending in slash
         "([^/]+)" ;; at least one non-slash (group 1)
-        "\\." ;; dot
-        "(.*)$" ;; any ending, (group 2)
+        "\\."     ;; dot
+        "(.*)$"   ;; any ending, (group 2)
         )))
 
 (defn parse-url
@@ -606,6 +693,23 @@ It includes:
                   (parse-url url))
               :dir dir)))))
 
+(defn infer-media-type
+  "Returns the `media-type` associated with the extension of `url`, if it exists
+  - Where
+    - `url` is a URL or URL string
+    - `media-type` is appropriate for an HTTP 'accept' header, e.g. 'text/turtle'
+  "
+  [url]
+  {:pre [(= (type url) java.net.URL)]}
+  (-> 
+   (igraph/query ontology [[:?media-url
+                            :formats/preferred_suffix (str "."
+                                                           (-> (parse-url url)
+                                                               :ext))]
+                           [:?media-url :formats/media_type :?media-type]])
+   unique
+   :?media-type))
+
 (defn cache-url-as-local-file
   "RETURNS `cached-file`, with contents of `url` loaded
   SIDE-EFFECT: creates file named `cached-file` if it does not already exist.
@@ -641,7 +745,10 @@ It includes:
                 (slurp url)
 
                 (context url :rdf/type :rdf-app/WebResource)
-                (-> (http-get-from-catalog url)
+                (-> (or (http-get-from-catalog url)
+                        (when-let [media-type (infer-media-type url)]
+                          (-> (cljc-http-get (str url)
+                                             {:accept media-type}))))
                     :body)
 
                 :else
@@ -658,7 +765,6 @@ It includes:
                      ::context context
                      ::url url
                      })))))
-
 
 (defn clear-url-cache!
   "Side-effect: deleletes cached local files for `url` in `urls` per `context`, or the whole cache if only `context` is specified.
@@ -874,10 +980,13 @@ Where
   - `s` is a string, typically to be rendered in a query or RDF source.
 "
   [s]
-  (value-trace
-   ::QuoteString
    (str "\"" s "\"")
-   ))
+   )
+
+(defn remove-newlines
+  "Returns `s` with \n removed. Addresses a lot of RDF parse errors."
+  [s]
+  (clojure.string/replace s #"\n" " "))
 
 (def transit-write-handlers
   "Atom of the form {`Class` `write-handler`, ...}
@@ -893,6 +1002,13 @@ Where
         (fn [ls]
           {:lang (.lang ls)
            :s (.s ls)
+           }))
+       DatatypeStr
+       (cognitect.transit/write-handler
+        "ont-app.vocabulary.dstr.DatatypeStr"
+        (fn [ds]
+          {:datatype (.datatype ds)
+           :datum (.s ds)
            }))
        }
       :cljs
@@ -912,26 +1028,22 @@ Where
        (cognitect.transit/read-handler
         (fn [from-rep]
           (->LangStr (:s from-rep) (:lang from-rep))))
+       "ont-app.vocabulary.dstr.DatatypeStr"
+       (cognitect.transit/read-handler
+        (fn [from-rep]
+          (->DatatypeStr (:datum from-rep) (:datatype from-rep))))
        }
       :cljs
       {})
    ))
 
-
-(defn render-literal-as-transit-json
-  "Returns 'x^^transit:json'
-  NOTE: this will be encoded on write and decoded on read by the
-    cognitect/transit library."
-  [x]
-  (stache/render "\"{{x}}\"^^transit:json" {:x (render-transit-json x)}))
-
 ;; RENDER LITERAL
 
-(def special-literal-dispatch
+(def special-render-literal-dispatch
   "A function [x] -> `dispatch-value`
   Where
   - `x` is any value, probabaly an RDF literal
-  - `dispatch-value` is a value to be matched to a `render-literal-dispatch` method.
+  - `dispatch-value` is a value to be matched to a `render-literal-dispatch`
   Default is to return nil, signalling no special dispatch."
   (atom (fn [_] nil)))
 
@@ -946,9 +1058,9 @@ Where
   (value-trace
    ::RenderLiteralDispatch
    [:literal literal]
-   (if-let [special-dispatch (@special-literal-dispatch literal)]
+   (if-let [special-dispatch (@special-render-literal-dispatch literal)]
      special-dispatch
-     ;; else no special dispatch...
+     ;; else there's no compiled object
      (type literal))))
 
 (defmulti render-literal
@@ -957,14 +1069,18 @@ Where
   render-literal-dispatch)
 
 (defmethod render-literal :rdf-app/TransitData
+  ;; data structures #'derived from transit data like maps, etc
   [v]
-  (render-literal-as-transit-json v))
-
+  (render-literal (voc/tag v :transit/json)))
 
 (defmethod render-literal LangStr
   [ls]
   (str (quote-str (.s ls)) "@" (.lang ls)))
 
+(defmethod render-literal DatatypeStr
+  [dstr]
+  (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-str (str dstr))
+                                          :type (dstr/datatype dstr)}))
 
 (defmethod render-literal ::number
   ;; ints and floats all derive from ::number
@@ -976,6 +1092,44 @@ Where
   [s]
   (quote-str s))
 
+
+
+;; READING LITERALS
+
+(def special-read-literal-dispatch
+  "A function [x] -> `dispatch-value`
+  Where
+  - `x` is any value, probabaly something parsed from a SPARQL binding
+  - `dispatch-value` is a value to be matched to a `read-literal-dispatch`
+  Default is to return nil, signalling no special dispatch."
+  (atom (fn [_] nil)))
+
+(defn read-literal-dispatch
+  [literal]
+  (value-trace
+   ::read-literal-dispatch-result
+   [::literal literal]
+   (if-let [special-dispatch (@special-read-literal-dispatch literal)]
+     special-dispatch
+     ;; else no special dispatch
+     (type literal))))
+
+(defmulti read-literal
+  "Signature: [literal] -> igraph-element
+  - Where
+    -`literal` is a value returned by an operation against an RDF store
+    - `igraph-element` is the corresponding clojure construct to be added to an IGraph representation, e.g. a KWI, int, string.
+  - This is the inverse of `render-literal`
+  "
+  read-literal-dispatch)
+
+(defmethod read-literal DatatypeStr
+  [this]
+  (voc/untag this))
+
+(defmethod read-literal :default
+  [literal]
+  literal)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; STANDARD TEMPLATES FOR IGRAPH MEMBER ACCESS
@@ -1108,44 +1262,31 @@ Where
           ]
     (let [query (stache/render normal-form-query-template
                                (query-template-map graph-uri rdf-store))
+          raw-result (query-fn rdf-store query)
           ]
       (value-trace
        ::QueryForNormalForm
        [:query query
         :graph-uri graph-uri
-        :query-fn query-fn]
-       (reduce collect-binding
-               {}
-               (query-fn rdf-store query)))))))
+        :query-fn query-fn
+        :raw-result raw-result
+        ]
+       (reduce collect-binding {} raw-result))))))
 
 
 (defn check-ns-metadata 
   "Logs a warning when `kwi` is in a namespace with no metadata."
   [kwi]
-  (let [n (symbol (namespace kwi))]
-    (when-let [the-ns (find-ns n)]
-      (when (not (meta the-ns))
-        (warn ::NoMetaDataInNS
-              :glog/message "The namespace for {{kwi}} is in a namespace with no associated metadata."
-              :kwi kwi))))
-  kwi)
+  (when-let [ns' (namespace kwi)]
+    (let [n (symbol ns')]
+      (when-let [the-ns (find-ns n)]
+        (when (not (meta the-ns))
+          (warn ::NoMetaDataInNS
+                :glog/message "The namespace for {{kwi}} is in a namespace with no associated metadata."
+                :kwi kwi)))))
+    kwi)
 
 
-(defn check-qname 
-  "Traps the keyword assertion error in voc and throws a more meaningful error 
-about blank nodes not being supported as first-class identifiers."
-  [uri-spec]
-  (if (bnode-kwi? uri-spec)
-    (name uri-spec)
-    ;;else not a blank node
-    (try
-      (voc/qname-for (check-ns-metadata uri-spec))
-      (catch Throwable e
-        (throw (ex-info (str "The URI spec " uri-spec " is invalid.\nCould it be a blank node?")
-                          (merge (ex-data e)
-                                 {:type ::Invalid-URI-spec
-                                  ::uri-spec uri-spec
-                                  })))))))
 (def query-for-p-o-template "A 'stache template for a query ref'd in `query-for-p-o`, informed by `query-template-map`"
   "
   Select ?p ?o
@@ -1184,7 +1325,7 @@ about blank nodes not being supported as first-class identifiers."
    (let [query  (prefixed
                  (stache/render query-for-p-o-template
                                 (merge (query-template-map graph-uri rdf-store)
-                                       {:subject (check-qname s)})))
+                                       {:subject (voc/as-qname s)})))
          collect-bindings (fn [acc b]
                             (update acc (:p b)
                                     (fn[os] (set (conj os (:o b))))))
@@ -1211,9 +1352,9 @@ about blank nodes not being supported as first-class identifiers."
 (defn query-for-o 
   "Returns #{`o`...} for `s` and `p` at endpoint of `rdf-store`
 Where:
-  - `o` is an object rendered per binding translator of `rdf-store`
   - `s` is a subject URI rendered per binding translator of `rdf-store`
   - `p` is a predicate URI rendered per binding translator of `rdf-store`
+  - `o` is an object rendered per binding translator of `rdf-store`
   - `rdf-store` is an RDF store
   - `query-fn` := fn [repo] -> bindings
   - `graph-uri` is a URI or KWI naming the graph, or a set of them
@@ -1227,8 +1368,8 @@ Where:
                  (stache/render
                   query-for-o-template
                   (merge (query-template-map graph-uri rdf-store)
-                         {:subject (check-qname s)
-                          :predicate (check-qname p)})))
+                         {:subject (voc/as-qname s)
+                          :predicate (voc/as-qname p)})))
         
          collect-bindings (fn [acc b]
                             (conj acc (:o b)))
@@ -1269,10 +1410,10 @@ Where:
                (stache/render
                 ask-s-p-o-template
                 (merge (query-template-map graph-uri rdf-store)
-                       {:subject (check-qname s)
-                        :predicate (check-qname p)
+                       {:subject (voc/as-qname s)
+                        :predicate (voc/as-qname p)
                         :object (if (keyword? o)
-                                  (voc/qname-for o)
+                                  (voc/as-qname o)
                                   (render-literal o))})))
         starting (debug ::Starting_ask-s-p-o
                         :query query
@@ -1292,3 +1433,13 @@ Where:
 (defmethod render-literal :rdf-app/LangStr ;; using the type is fine
   [ls]
   (str (quote-str (.s ls)) "@" (.lang ls)))
+
+
+(def ^:deprecated special-literal-dispatch
+  "Deprecated. Use special-render-literal-dispatch"
+  special-render-literal-dispatch)
+
+
+(def ^:deprecated default-context
+  "Deprecated. Use default-io-context."
+  default-io-context)

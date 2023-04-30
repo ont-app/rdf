@@ -15,12 +15,14 @@
    [ont-app.rdf.test-support :as test-support]
    [ont-app.vocabulary.core :as voc]
    [ont-app.vocabulary.lstr :as lstr]
+   [ont-app.vocabulary.dstr :as dstr]
    #?(:clj [clojure.repl :refer :all])
    #?(:clj [ont-app.graph-log.levels :as levels
             :refer [warn debug trace value-trace value-debug]]
       :cljs [ont-app.graph-log.levels :as levels
             :refer-macros [warn debug trace value-trace value-debug]])
    ))
+
 
 (glog/log-reset!)
 (glog/set-level! :glog/LogGraph :glog/OFF)
@@ -53,8 +55,8 @@
   (let [java-resource (io/resource "test_support/bnode-test.ttl")
         web-resource (java.net.URL. "http://www.ontologydesignpatterns.org/ont/dul/DUL.owl")
         ]
-    (is (spec/valid? ::rdf-app/bnode-kwi :_/<_b123>))
-    (is (not (spec/valid? ::rdf-app/bnode-kwi :<_b123>)))
+    (is (spec/valid? ::rdf-app/bnode-kwi :rdf-app/_:b123))
+    (is (not (spec/valid? ::rdf-app/bnode-kwi :_:b123)))
     
     (is (spec/valid? ::rdf-app/file-resource java-resource))
     (is (not (spec/valid? ::rdf-app/file-resource web-resource)))
@@ -215,15 +217,25 @@
              ))
       )))
 
+(defn transit-tag-untag
+  [x]
+  (-> x
+      (voc/tag :transit/json)
+      (voc/untag)))
+
+(defn transit-round-trip "Returns `x` after converting it to a transit literal and re-parsing it"
+    [x]
+    (as-> (rdf-app/render-literal x)
+        it
+        (re-matches rdf-app/transit-re it)
+        (nth it 1)
+        (rdf-app/read-transit-json it)))
+
 (deftest test-transit
   (testing "transit encoding/decoding"
     (let [v [1 2 3]
           s (set v)
           f `(fn [x] "yowsa")
-          round-trip (fn [x]
-                       (rdf-app/read-transit-json
-                        ((re-matches rdf-app/transit-re
-                                     (rdf-app/render-literal x)) 1)))
           order-neutral (fn [s] (str/replace s #"[0-9]" "<number>"))
           cljs-ns->clojure-ns (fn [s] (str/replace s #"cljs" "clojure"))
           ]
@@ -232,25 +244,20 @@
       (is ((parents (rdf-app/render-literal-dispatch v))
            :rdf-app/TransitData))
       (is (= (rdf-app/render-literal v)
-             "\"[1,2,3]\"^^transit:json"))
-      (is (= ((re-matches rdf-app/transit-re (rdf-app/render-literal v)) 1)
-             "[1,2,3]"))
-      (is (= (round-trip v)
+             "\"[1,2,3]\"^^transit:json"
+             ))
+      (is (= (transit-tag-untag v)
              v))
+      (is (= (transit-round-trip v) v))
       ;; applying set a boolean function...
       (is ((parents (rdf-app/render-literal-dispatch s))
            :rdf-app/TransitData))
-      (is (= (order-neutral (str (rdf-app/render-literal s)))
-             (str "\"[&quot;~#set&quot;,[<number>,<number>,<number>]]\"^^transit:json")))
-      (is (= (round-trip s)
+      (is (= (transit-tag-untag s)
              s))
       ;; applying set a boolean function...
       (is ((parents (rdf-app/render-literal-dispatch f))
            :rdf-app/TransitData))
-      (is (= (cljs-ns->clojure-ns (rdf-app/render-literal f))
-             "\"[&quot;~#list&quot;,[&quot;~$clojure.core/fn&quot;,[&quot;~$ont-app.rdf.core-test/x&quot;],&quot;yowsa&quot;]]\"^^transit:json"))
-      (is (= (round-trip f)
-             f))
+      (is (= (transit-tag-untag f) f))
       )))
 
 (deftest render-basic-literals-test
@@ -258,8 +265,7 @@
   (is (= (str (rdf-app/render-literal 1)) "1"))
   (is (= (str (rdf-app/render-literal 1.0)) "1.0"))
   (is (= (str (rdf-app/render-literal #?(:clj #voc/lstr "dog@en"
-                                         :cljs (read-string "#voc/lstr \"dog@en\"")
-                                         ))
+                                         :cljs (read-string "#voc/lstr \"dog@en\"")))
               "\"dog\"@en"))))
 
 (def test-query-template "
@@ -315,6 +321,46 @@
       (is (not (.exists cache))))
     ))
 
+(deftest issue-12-check-qname-error
+  ;; problem came from creating symbol of null ns. Should no longer throw error.
+  (is (= (rdf-app/check-ns-metadata :http:%2F%2Fdatashapes.org%2Fdash#expectedResult)
+         :http:%2F%2Fdatashapes.org%2Fdash#expectedResult)))
+
+(defn do-read-ttl-from-github
+  []
+  (let [source (java.net.URL. "https://raw.githubusercontent.com/TopQuadrant/shacl/master/src/test/resources/sh/tests/rules/sparql/rectangle.test.ttl")
+        ]
+    (try
+      (rdf-app/read-rdf test-context nil source)
+      ;; this will fail as "No Method for Read RDF", but will cache a local file
+      (catch Throwable e
+        (let [e-data (ex-data e)
+              ]
+          e-data)))))
+
+(deftest issue-14-read-ttl-from-github
+  (let [result (do-read-ttl-from-github)]
+    ;; No read method defined, but the cached file should be non-empty
+    (is (= (:type result)
+           :ont-app.rdf.core/NoMethodForReadRdf))
+    (is (> (-> result
+               :ont-app.rdf.core/file
+               (.length))
+           0))
+    (.delete (-> result :ont-app.rdf.core/file))))
+
+(deftest resource-types
+  ;; introduced in voc version 0.4. Blank nodes have to be supported in RDF
+  (is (= (voc/resource-type :rdf-app/_:yadda-yadda) :rdf-app/BnodeKwi))
+  (is (= (voc/resource-type "_:yadda-yadda") :rdf-app/BnodeString))
+  ;; The "URI" of a bnode is just the bnode string
+  (is (= (voc/resource-type (voc/as-uri-string  :rdf-app/_:yadda-yadda))
+         :rdf-app/BnodeString))
+  (is (= (voc/resource-type (voc/as-kwi "_:yadda-yadda")) :rdf-app/BnodeKwi))
+  ;; The "qname" of a bnode is just the bnode string
+  (is (= (voc/as-qname :rdf-app/_:yadda-yadda)
+         (voc/as-uri-string :rdf-app/_:yadda-yadda))))
+
 (comment
   (require '[clojure.pprint :refer [pprint]])
   (require '[clojure.reflect :refer [reflect]])
@@ -338,4 +384,31 @@
                                                 :rdf/type :rdf-app/WebResource])
                                    rdfs-web-resource)
    
-  )
+
+
+(defn describe-api
+  "Returns [`member`, ...] for `obj`, for public members of `obj`, sorted by :name,  possibly filtering on `name-re`
+  - Where
+    - `obj` is an object subject to reflection
+    - `name-re` is a regular expression to match against (:name `member`)
+    - `member` := m, s.t. (keys m) = #{:name, :parameter-types, :return-type}
+  "
+  ([obj]
+   (let [collect-public-member (fn [acc member]
+                                (if (not
+                                     (empty?
+                                      (clojure.set/intersection #{:public}
+                                                                (:flags member))))
+                                  (conj acc (select-keys member
+                                                         [:name
+                                                          :parameter-types
+                                                          :return-type]))
+                                  ;;else member is not public
+                                  acc))]
+     (sort (fn compare-names [this that] (compare (:name this) (:name that)))
+           (reduce collect-public-member [] (:members (reflect obj))))))
+  ([obj name-re]
+   (filter (fn [member]
+             (re-matches name-re (str (:name member))))
+           (describe-api obj))))
+  ) ;; /comment

@@ -7,7 +7,8 @@
    ;; "rdf-test" ;; matches :: declarations directly
    ;; :vann/preferredNamespaceUri
    ;; "http://rdf.naturallexicon.org/ont-app/igraph/rdf-test#"
-   :clj-kondo/config '{:linters {:redundant-let {:level :off}}}
+   :clj-kondo/config '{:linters {:redundant-let {:level :off}
+                                 :unresolved-symbol {:level :off}}}
    }
   (:require
    [clojure.set]
@@ -242,3 +243,15 @@ Where
             transit-test-map)))
      true)
     report))
+
+;;;;;;;;;;;;;
+;; UTILIITES
+;;;;;;;;;;;;;
+
+(comment
+
+(defn trace-taps
+  []
+  (add-tap (fn [tap] (trace (or (:type tap) ::unclassified-tap) :tap tap))))
+) ;;/comment
+

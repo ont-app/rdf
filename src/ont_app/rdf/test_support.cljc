@@ -68,8 +68,8 @@ Where
     (assert-and-report!
      :rdf-app/AllSubjectsAreBnodes
      "All subjects should match the bnode spec"
-     (mapv rdf/bnode-kwi? (subjects bnode-graph))
-     ["_" "_"]
+     (mapv (comp some? rdf/bnode-kwi?) (subjects bnode-graph))
+     [true true]
      )
     
     (assert-and-report!

@@ -1,3 +1,5 @@
+- v 0.3.1:
+  - Tweak to test support for bnodes
 - v 0.3.0:
   - Changes per vocabulary 0.4.0
     - refactoring for resource-type methods

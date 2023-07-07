@@ -148,9 +148,8 @@ directly as they are in Clojure by default. Values unhandled by a
 specific method will be rendered by default as strings in quotes.
 
 
-
 Instances of `LangStr` will be rendered as [discussed
-below](#h3-language-tagged-strings).
+below](#language-tagged-strings).
 
 All of this behavior can be overridden with the
 `@special-literal-dispatch` atom discussed in the following section.
@@ -174,8 +173,8 @@ has examples of this.
 
 ### The `read-literal` multimethod
 
-This method should return a KWI or a literal suitable for inclusion in
-an IGraph.
+This method should translate an object in your RDF implementation into
+a value suitable for inclusion in an IGraph.
 
 Its signature is `[literal] -> graph-element`.
 

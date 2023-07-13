@@ -14,7 +14,7 @@ It includes:
                                  :unresolved-namespace {:level :off}}}
    } ;; meta
   (:require
-   [clojure.string :as s]
+   [clojure.string :as str]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
    [cljstache.core :as stache]
@@ -983,6 +983,10 @@ Where
    (str "\"" s "\"")
    )
 
+(defn triple-single-quote-str
+  [s]
+  (str "'''" s "'''"))
+
 (defn remove-newlines
   "Returns `s` with \n removed. Addresses a lot of RDF parse errors."
   [s]
@@ -1079,8 +1083,12 @@ Where
 
 (defmethod render-literal DatatypeStr
   [dstr]
-  (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-str (str dstr))
-                                          :type (dstr/datatype dstr)}))
+  ;; we need to escape quotes properly....
+  (let [quote-fn (if (str/includes? (str dstr) "\"")
+                   triple-single-quote-str
+                   quote-str)]
+    (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-fn (str dstr))
+                                            :type (dstr/datatype dstr)})))
 
 (defmethod render-literal ::number
   ;; ints and floats all derive from ::number
@@ -1090,7 +1098,10 @@ Where
 
 (defmethod render-literal :default
   [s]
-  (quote-str s))
+  (let [quote-fn (if (str/includes? s  "\"")
+                   triple-single-quote-str
+                   quote-str)]
+    (quote-fn s)))
 
 
 
@@ -1173,7 +1184,7 @@ Where
         ]
     (merge @query-template-defaults
            {:from-clauses (if graph-uri
-                            (s/join "\n"
+                            (str/join "\n"
                                     (map (comp from-clause-for voc/iri-for)
                                          (as-set graph-uri)))
                             ;; else no graph uri

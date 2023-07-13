@@ -14,7 +14,7 @@ It includes:
                                  :unresolved-namespace {:level :off}}}
    } ;; meta
   (:require
-   [clojure.string :as s]
+   [clojure.string :as str]
    [clojure.spec.alpha :as spec]
    ;; 3rd party
    [cljstache.core :as stache]
@@ -98,6 +98,8 @@ It includes:
    )
 
 (declare transit-read-handlers)
+(declare transit-datum-re)
+
 (defn read-transit-json
   "Returns a value parsed from transit string `s`
   Where
@@ -105,8 +107,8 @@ It includes:
   Note: custom datatypes will be informed by @transit-read-handlers
   "
   [^String s]
-  (tap> {:type ::starting-read-transit-json
-         ::s s})
+  (trace ::starting-read-transit-json
+         ::s s)
   #?(:clj
      (transit/read
       (transit/reader
@@ -130,9 +132,6 @@ It includes:
          s
          "&quot;" "\""))))
 
-(defmethod voc/untag :transit/json
-  [datum & _]
-  (-> datum str read-transit-json))
 
 (declare transit-write-handlers)
 (defn render-transit-json 
@@ -161,7 +160,12 @@ It includes:
 
 (defmethod voc/tag :transit/json
   [datum _]
-  (dstr/->DatatypeStr (render-transit-json datum) "transit:json"))
+  (dstr/->DatatypeStr (render-transit-json datum)
+                      "transit:json"))
+
+(defmethod voc/untag :transit/json
+  [dstr & _]
+  (-> (read-transit-json (str dstr))))
 
 (defn cljc-file-exists?
   "True when `path` exists in the local file system"
@@ -275,19 +279,41 @@ It includes:
 ;; except in try/catch clauses
 
 ;; SPECS
-(def transit-re
-  "Matches data tagged as transit:json"
-  (re-pattern (str "^\"" ;; start with quote
-                   "(.*)" ;; anything (group 1)
-                   "\"" ;; terminal quote
-                   "\\^\\^" ;; ^^
-                   "transit:json$" ;; end with type tag
+
+(def quoted-str-re
+  "matches output of `quote-str` -> [_ _ unquoted _]
+  "
+  (re-pattern (str "^"
+                   "("   ;; start group 1
+                   "\""  ;;   open single quote
+                   "|"   ;;   or
+                   "'''" ;;   open '''
+                   ")"   ;; end group 1
+                   "("   ;; start group 2
+                   ".*"  ;;   anything
+                   ")"   ;; end group 2
+                   "("   ;; start group 3
+                   "\""  ;;   close single quote
+                   "|"   ;;   or
+                   "'''" ;;   close '''
+                   ")"   ;; end group 3
+                   "$"
                    )))
 
+(spec/def ::transit-datum (spec/and string? (fn [s] (re-matches quoted-str-re s))))
+
+(def transit-re
+  "Matches data tagged as transit:json"
+  (let [tdr (str quoted-str-re)]
+    (re-pattern (str "^"
+                     ;;"("
+                     (subs tdr 1 (dec (count tdr))) ;; remove ^ and $ from quoted-str-re
+                     ;;")"
+                     "\\^\\^" ;; ^^
+                     "transit:json$" ;; end with type tag
+                     ))))
 
 (spec/def ::transit-tag (spec/and string? (fn [s] (re-matches transit-re s))))
-
-;;(def bnode-re #"^_.*")
 
 (def bnode-name-re "A regex to parse bnodes"
   (re-pattern
@@ -384,6 +410,30 @@ It includes:
 (defmethod voc/as-qname :rdf-app/BnodeKwi
   [this]
   (voc/as-uri-string this))
+
+;; URLs
+
+(defmethod voc/resource-type [::resource-type-context java.net.URL]
+  [this]
+  (if (spec/valid? ::file-resource this)
+    :rdf-app/FileResource
+    ;; else
+    :rdf-app/WebResource))
+
+(derive :rdf-app/FileResource :rdf-app/URL)
+(derive :rdf-app/WebResource :rdf-app/URL)
+
+(defmethod voc/as-uri-string :rdf-app/URL
+  [this]
+  (str this))
+
+(defmethod voc/as-kwi :rdf-app/URL
+  [this]
+  (voc/as-kwi (str this)))
+
+(defmethod voc/as-qname :rdf-app/URL
+  [this]
+  (voc/as-qname (str this)))
 
 ;;;;;;;;;;;;;;;;;;
 ;; INPUT/OUTPUT
@@ -980,8 +1030,17 @@ Where
   - `s` is a string, typically to be rendered in a query or RDF source.
 "
   [s]
-   (str "\"" s "\"")
-   )
+  (if (str/includes? s  "\"")
+    (str "'''" s "'''")
+    ;;else
+    (str "\"" s "\"")))
+
+
+(defn unquote-str
+  "Returns `quoted-str` without the quotes. Inverse of `quote-str`."
+  [quoted-str]
+  (let [[_ _ s _] (re-matches quoted-str-re quoted-str)]
+    s))
 
 (defn remove-newlines
   "Returns `s` with \n removed. Addresses a lot of RDF parse errors."
@@ -1079,6 +1138,7 @@ Where
 
 (defmethod render-literal DatatypeStr
   [dstr]
+  ;; we need to escape quotes properly....
   (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-str (str dstr))
                                           :type (dstr/datatype dstr)}))
 
@@ -1091,8 +1151,6 @@ Where
 (defmethod render-literal :default
   [s]
   (quote-str s))
-
-
 
 ;; READING LITERALS
 
@@ -1111,7 +1169,6 @@ Where
    [::literal literal]
    (if-let [special-dispatch (@special-read-literal-dispatch literal)]
      special-dispatch
-     ;; else no special dispatch
      (type literal))))
 
 (defmulti read-literal
@@ -1122,6 +1179,12 @@ Where
   - This is the inverse of `render-literal`
   "
   read-literal-dispatch)
+
+(defmethod read-literal (type "")
+  [s]
+  (if-let [[_ _ datum _] (re-matches transit-re s)]
+    (read-transit-json datum)
+    s))
 
 (defmethod read-literal DatatypeStr
   [this]
@@ -1173,7 +1236,7 @@ Where
         ]
     (merge @query-template-defaults
            {:from-clauses (if graph-uri
-                            (s/join "\n"
+                            (str/join "\n"
                                     (map (comp from-clause-for voc/iri-for)
                                          (as-set graph-uri)))
                             ;; else no graph uri

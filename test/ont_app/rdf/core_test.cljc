@@ -29,7 +29,7 @@
 
 (defn log-reset!
   ([]
-   (log-reset! :glog/DEBUG))
+   (log-reset! :glog/TRACE))
   ([level]
    (glog/log-reset!)
    (glog/set-level! level)))
@@ -223,21 +223,18 @@
       (voc/tag :transit/json)
       (voc/untag)))
 
-(defn transit-round-trip "Returns `x` after converting it to a transit literal and re-parsing it"
-    [x]
-    (as-> (rdf-app/render-literal x)
-        it
-        (re-matches rdf-app/transit-re it)
-        (nth it 1)
-        (rdf-app/read-transit-json it)))
+(defn transit-round-trip "Returns `x` after converting it to a transit literal and re-reading it"
+  [x]
+  (-> (rdf-app/render-literal x)
+      (rdf-app/read-literal)))
 
 (deftest test-transit
   (testing "transit encoding/decoding"
     (let [v [1 2 3]
           s (set v)
           f `(fn [x] "yowsa")
+          v-of-k [::a]
           order-neutral (fn [s] (str/replace s #"[0-9]" "<number>"))
-          cljs-ns->clojure-ns (fn [s] (str/replace s #"cljs" "clojure"))
           ]
       (is (spec/valid? ::rdf-app/transit-tag "\"[1 2 3]\"^^transit:json"))
       ;; applying set a boolean function...
@@ -258,7 +255,10 @@
       (is ((parents (rdf-app/render-literal-dispatch f))
            :rdf-app/TransitData))
       (is (= (transit-tag-untag f) f))
+      (is (= (transit-round-trip v-of-k)
+             v-of-k))
       )))
+
 
 (deftest render-basic-literals-test
   "Basic render-literal implementations for numbers and language-tagged strings"
@@ -349,6 +349,7 @@
            0))
     (.delete (-> result :ont-app.rdf.core/file))))
 
+
 (deftest resource-types
   ;; introduced in voc version 0.4. Blank nodes have to be supported in RDF
   (is (= (voc/resource-type :rdf-app/_:yadda-yadda) :rdf-app/BnodeKwi))
@@ -361,30 +362,12 @@
   (is (= (voc/as-qname :rdf-app/_:yadda-yadda)
          (voc/as-uri-string :rdf-app/_:yadda-yadda))))
 
-(comment
-  (require '[clojure.pprint :refer [pprint]])
-  (require '[clojure.reflect :refer [reflect]])
-  (require '[clojure.repl :refer [apropos]])
-  (def g
-    (->> (voc/prefix-to-ns)
-         (reduce-kv rdf-app/collect-ns-catalog-metadata (make-graph))))
-  (def dc-url (java.net.URL. "http://purl.org/dc/elements/1.1/"))
-  (def m-type  (unique (igraph/get-o @rdf-app/resource-catalog dc-url :dcat/mediaType)))
-  (def ext (let [
-                 ]
-             (-> (igraph/query rdf-app/ontology
-                               [[:?media-url :formats/media_type m-type]
-                                [:?media-url :formats/preferred_suffix :?suffix]])
-                 (unique)
-                 (:?suffix)
-                 )))
-  
-  (rdf-app/cache-url-as-local-file (igraph/add @rdf-app/default-context
-                                               [rdfs-web-resource
-                                                :rdf/type :rdf-app/WebResource])
-                                   rdfs-web-resource)
-   
-
+(deftest issue-15-quoted-tagged-literals
+  ;; triple-single-quotes for content including regular quotes....
+  (is (= "'''[\"~:a\"]'''^^transit:json"
+         (rdf-app/render-literal [:a])))
+  (is (= "'''This is \"quoted\".'''"
+         (rdf-app/render-literal "This is \"quoted\"."))))
 
 (defn describe-api
   "Returns [`member`, ...] for `obj`, for public members of `obj`, sorted by :name,  possibly filtering on `name-re`
@@ -411,4 +394,26 @@
    (filter (fn [member]
              (re-matches name-re (str (:name member))))
            (describe-api obj))))
+
+(comment
+  (require '[clojure.pprint :refer [pprint]])
+  (require '[clojure.reflect :refer [reflect]])
+  (require '[clojure.repl :refer [apropos]])
+  (def g
+    (->> (voc/prefix-to-ns)
+         (reduce-kv rdf-app/collect-ns-catalog-metadata (make-graph))))
+  (def dc-url (java.net.URL. "http://purl.org/dc/elements/1.1/"))
+  (def m-type  (unique (igraph/get-o @rdf-app/resource-catalog dc-url :dcat/mediaType)))
+  (def ext (let [
+                 ]
+             (-> (igraph/query rdf-app/ontology
+                               [[:?media-url :formats/media_type m-type]
+                                [:?media-url :formats/preferred_suffix :?suffix]])
+                 (unique)
+                 (:?suffix)
+                 )))
+   (rdf-app/cache-url-as-local-file (igraph/add @rdf-app/default-context
+                                               [rdfs-web-resource
+                                                :rdf/type :rdf-app/WebResource])
+                                   rdfs-web-resource)
   ) ;; /comment

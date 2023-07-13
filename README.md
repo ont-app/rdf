@@ -95,16 +95,19 @@ This resource-type context adds the following recognized
 resource-types to [the types defined in
 ont-app/vocabulary](https://github.com/ont-app/vocabulary#existing-resource-types):
 
-| Resource| maps to resource type | Notes|
-| --- | --- | --- |
-| java.lang.String | :rdf-app/BnodeString | A string expressing a blank node. |
-| clojure.lang.Keyword | :rdf-app/BnodeKwi | A keyword expressing a blank node. |
+| Resource| maps to resource type |
+| --- | --- |
+| java.lang.String | :rdf-app/BnodeString |
+| clojure.lang.Keyword | :rdf-app/BnodeKwi |
+| java.net.URL | :rdf-app/FileResource<br>:rdf-app/WebResource |
 
 
-- `:rdf-app/BnodeString` matches the `bnode-name-re` pattern,
+- `:rdf-app/BnodeString` a string which matches the `bnode-name-re` pattern,
   e.g. "_:yadda-yadda".
 - `:rdf-app/BnodeKwi` matches keywords interned in the `rdf-app`
   namespace with names matching `bnode-name-re`.
+- `:rdf-app/FileResource` is a URL naming a file resource, typically in a jar.
+- `:rdf-app/WebResource` is a URL naming a resource on the web, typically starting with _http*_.
 
 Note that the name of a bnode will not survive round-tripping, so the
 primary use for this is usually to add triples with bnodes in them by
@@ -293,11 +296,19 @@ Some convenience utilites of dealing with strings.
 
 #### `quote-str`
 
-Adds string-escapes:
+Adds string-escapes. If the string to be escaped itself contains
+quotes, triple single quotes will be used. Its inverse is
+`unquote-str`...
 
 ```clj
 > (quote-str "yadda")
 "\"yadda\""
+> (quote-str *1)
+"'''\"yadda\"'''"
+> (unquote-str *1)
+"\"yadda\""
+> (unquote-str *1)
+"yadda"
 ```
 
 #### `remove-newlines`

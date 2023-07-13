@@ -13,7 +13,7 @@
                                          ;; per nvd CVE-2023-23459
                                          ]}
          ont-app/igraph {:mvn/version "0.2.2"}
-         ont-app/vocabulary {:mvn/version "0.4.1"}
+         ont-app/vocabulary {:mvn/version "0.4.2"}
         }
   :aliases {
            ;;;;;;;;;;;;;;;;

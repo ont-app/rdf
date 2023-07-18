@@ -1,3 +1,6 @@
+- v 0.3.2:
+  - Adding resource-type for URLs
+  - Refactoring the way transit data is quoted (issue 15)
 - v 0.3.1:
   - Tweak to test support for bnodes
 - v 0.3.0:

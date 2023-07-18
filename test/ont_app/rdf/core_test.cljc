@@ -29,7 +29,7 @@
 
 (defn log-reset!
   ([]
-   (log-reset! :glog/DEBUG))
+   (log-reset! :glog/TRACE))
   ([level]
    (glog/log-reset!)
    (glog/set-level! level)))
@@ -223,13 +223,10 @@
       (voc/tag :transit/json)
       (voc/untag)))
 
-(defn transit-round-trip "Returns `x` after converting it to a transit literal and re-parsing it"
-    [x]
-    (as-> (rdf-app/render-literal x)
-        it
-        (re-matches rdf-app/transit-re it)
-        (nth it 1)
-        (rdf-app/read-transit-json it)))
+(defn transit-round-trip "Returns `x` after converting it to a transit literal and re-reading it"
+  [x]
+  (-> (rdf-app/render-literal x)
+      (rdf-app/read-literal)))
 
 (deftest test-transit
   (testing "transit encoding/decoding"
@@ -238,7 +235,6 @@
           f `(fn [x] "yowsa")
           v-of-k [::a]
           order-neutral (fn [s] (str/replace s #"[0-9]" "<number>"))
-          cljs-ns->clojure-ns (fn [s] (str/replace s #"cljs" "clojure"))
           ]
       (is (spec/valid? ::rdf-app/transit-tag "\"[1 2 3]\"^^transit:json"))
       ;; applying set a boolean function...

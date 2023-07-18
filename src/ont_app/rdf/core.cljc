@@ -1143,16 +1143,8 @@ Where
 (defmethod render-literal DatatypeStr
   [dstr]
   ;; we need to escape quotes properly....
-<<<<<<< HEAD
-  (let [quote-fn (if (str/includes? (str dstr) "\"")
-                   triple-single-quote-str
-                   quote-str)]
-    (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-fn (str dstr))
-                                            :type (dstr/datatype dstr)})))
-=======
   (stache/render "{{{datum}}}^^{{type}}" {:datum (quote-str (str dstr))
                                           :type (dstr/datatype dstr)}))
->>>>>>> develop
 
 (defmethod render-literal ::number
   ;; ints and floats all derive from ::number
